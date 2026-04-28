@@ -1,0 +1,264 @@
+import React, { useState } from 'react';
+import { X, Layout, Database, Zap as ZapIcon, Briefcase, Code, Megaphone, Users, ArrowRight, ArrowLeft } from 'lucide-react';
+
+interface Props {
+  onClose: () => void;
+  onCreate: (name: string, template?: { columns: string[], labels: Record<string, string> }) => Promise<void>;
+  isDarkMode?: boolean;
+}
+
+const TEMPLATES = [
+  {
+    id: 'blank',
+    title: 'En blanco',
+    description: 'Comienza desde cero con una tabla limpia.',
+    icon: <Layout className="w-6 h-6" />,
+    color: 'from-slate-400 to-slate-600'
+  },
+  {
+    id: 'marketing',
+    title: 'Marketing',
+    description: 'Gestión de campañas y redes sociales.',
+    icon: <Megaphone className="w-6 h-6" />,
+    color: 'from-brand-400 to-brand-600',
+    columns: ['atl', 'social', 'partners', 'dr', 'editorial', 'tactical'],
+    labels: { atl: 'ATL', social: 'Social', partners: 'Partners', dr: 'DR', editorial: 'Editorial', tactical: 'Tactical Act' }
+  },
+  {
+    id: 'development',
+    title: 'Desarrollo',
+    description: 'Sprint planning, bugs y features.',
+    icon: <Code className="w-6 h-6" />,
+    color: 'from-emerald-400 to-emerald-600',
+    columns: ['frontend', 'backend', 'design', 'qa', 'devops'],
+    labels: { frontend: 'Frontend', backend: 'Backend', design: 'Diseño UX/UI', qa: 'QA Testing', devops: 'DevOps' }
+  },
+  {
+    id: 'sales',
+    title: 'Ventas CRM',
+    description: 'Seguimiento de leads y oportunidades.',
+    icon: <Briefcase className="w-6 h-6" />,
+    color: 'from-amber-400 to-amber-600',
+    columns: ['prospect', 'qualified', 'proposal', 'negotiation', 'closed'],
+    labels: { prospect: 'Prospecto', qualified: 'Calificado', proposal: 'Propuesta', negotiation: 'Negociación', closed: 'Cerrado' }
+  },
+  {
+    id: 'hr',
+    title: 'Recursos Humanos',
+    description: 'Proceso de selección y onboarding.',
+    icon: <Users className="w-6 h-6" />,
+    color: 'from-pink-400 to-pink-600',
+    columns: ['resume', 'interview', 'technical', 'offer', 'hired'],
+    labels: { resume: 'CV Revisado', interview: '1ra Entrevista', technical: 'Prueba Técnica', offer: 'Oferta', hired: 'Contratado' }
+  }
+];
+
+export default function CreateProjectModal({ onClose, onCreate, isDarkMode = false }: Props) {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [name, setName] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('blank');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleNext = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setStep(2);
+  };
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    setIsLoading(true);
+    
+    const template = TEMPLATES.find(t => t.id === selectedTemplateId);
+    
+    // Si es "En blanco", pasamos undefined para que use los default estáticos o un array vacío según useCampaignStore
+    // Mejor le pasamos un array vacío si queremos que empiece sin nada, o undefined para usar el default de la BD.
+    // Para que realmente sea "En blanco" le pasaremos arrays vacíos, así no tiene las columnas por defecto.
+    const templateData = template?.id === 'blank' 
+      ? { columns: [], labels: {} } 
+      : (template?.columns ? { columns: template.columns, labels: template.labels! } : undefined);
+
+    await onCreate(name.trim(), templateData);
+    setIsLoading(false);
+    onClose();
+  };
+
+  const isFormValid = name.trim().length > 0;
+
+  return (
+    <div className={`fixed inset-0 z-[100] flex w-full font-sans animate-in slide-in-from-bottom-8 duration-500 ${isDarkMode ? 'bg-[#030305]' : 'bg-white'}`}>
+      {/* Left Panel */}
+      <div className="flex-1 flex flex-col pt-8 px-8 sm:px-16 lg:px-24 xl:px-32 relative h-full overflow-y-auto">
+        <button 
+          onClick={onClose}
+          className={`absolute top-8 right-8 z-50 flex items-center justify-center w-10 h-10 rounded-full transition-colors ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200'}`}
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {step === 1 ? (
+          <div className="w-full max-w-md mt-32 animate-in fade-in slide-in-from-left-4 duration-500">
+            <div className="mb-12">
+              <h1 className={`text-[32px] font-medium leading-tight tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                Comencemos con el nombre<br/>de tu proyecto
+              </h1>
+            </div>
+
+            <form onSubmit={handleNext} className="space-y-8">
+              <div className="relative group">
+                <input
+                  type="text"
+                  autoFocus
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={`w-full border-b-2 ${isDarkMode ? 'border-white/10 focus:border-brand-500 text-white' : 'border-slate-200 focus:border-brand-500 text-slate-900'} pb-2 pt-4 bg-transparent text-xl outline-none transition-colors peer placeholder-transparent`}
+                  placeholder="Ingresa el nombre de tu proyecto"
+                />
+                <label className={`absolute left-0 -top-1 text-[13px] font-medium ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} transition-all peer-placeholder-shown:text-xl peer-placeholder-shown:top-3 peer-placeholder-shown:font-normal peer-focus:-top-1 peer-focus:text-[13px] peer-focus:text-brand-500 peer-focus:font-medium pointer-events-none`}>
+                  Ingresa el nombre de tu proyecto
+                </label>
+                
+                <div className="mt-4 flex items-center">
+                  <span className={`px-3 py-1 rounded-full text-[11px] font-mono border ${isDarkMode ? 'bg-white/5 text-slate-400 border-white/10' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                    {name.trim() ? name.trim().toLowerCase().replace(/\s+/g, '-') + '-id' : 'mi-increible-proyecto-id'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-12 flex items-center justify-between">
+                <p className={`text-[11px] leading-tight max-w-[200px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  ¿Ya tienes un proyecto de Google Cloud?<br/>
+                  <a href="#" className="text-brand-500 font-medium hover:underline">Agregar NaticBox al proyecto</a>
+                </p>
+
+                <button
+                  type="submit"
+                  disabled={!isFormValid}
+                  className={`flex items-center justify-center gap-2 px-8 py-3 rounded-full text-sm font-semibold transition-all duration-300 ${
+                    isFormValid 
+                      ? isDarkMode 
+                        ? 'bg-white text-slate-900 hover:bg-slate-200 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:-translate-y-0.5' 
+                        : 'bg-slate-900 text-white hover:bg-slate-800 shadow-md hover:shadow-lg hover:-translate-y-0.5' 
+                      : isDarkMode 
+                        ? 'bg-white/5 text-slate-600 cursor-not-allowed' 
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  Continuar <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="w-full max-w-2xl mt-24 pb-12 animate-in fade-in slide-in-from-right-4 duration-500">
+            <button 
+              onClick={() => setStep(1)}
+              className={`mb-8 flex items-center gap-2 text-sm font-medium transition-colors ${isDarkMode ? 'text-slate-500 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}
+            >
+              <ArrowLeft className="w-4 h-4" /> Volver
+            </button>
+
+            <div className="mb-10">
+              <h1 className={`text-[32px] font-medium leading-tight tracking-tight mb-3 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                Prediseña tu flujo de trabajo
+              </h1>
+              <p className={`text-[15px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                Elige una plantilla para "{name}" o comienza con un lienzo en blanco. 
+                Podrás añadir o eliminar columnas más adelante.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-12">
+              {TEMPLATES.map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => setSelectedTemplateId(template.id)}
+                  className={`flex items-start gap-4 p-5 rounded-2xl border text-left transition-all duration-300 ${
+                    selectedTemplateId === template.id
+                      ? isDarkMode 
+                        ? 'bg-brand-500/10 border-brand-500 shadow-[0_0_20px_rgba(99,102,241,0.15)] ring-1 ring-brand-500'
+                        : 'bg-brand-50 border-brand-500 shadow-md ring-1 ring-brand-500'
+                      : isDarkMode
+                        ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                        : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br shadow-inner ${template.color} text-white`}>
+                    {template.icon}
+                  </div>
+                  <div>
+                    <h3 className={`font-semibold mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      {template.title}
+                    </h3>
+                    <p className={`text-[13px] leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {template.description}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end">
+              <button
+                onClick={handleCreate}
+                disabled={isLoading}
+                className={`flex items-center justify-center gap-2 px-10 py-3.5 rounded-full text-sm font-semibold transition-all duration-300 ${
+                  isDarkMode 
+                    ? 'bg-white text-slate-900 hover:bg-slate-200 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:-translate-y-0.5' 
+                    : 'bg-slate-900 text-white hover:bg-slate-800 shadow-md hover:shadow-lg hover:-translate-y-0.5'
+                }`}
+              >
+                {isLoading ? (
+                  <div className={`w-5 h-5 border-2 rounded-full animate-spin ${isDarkMode ? 'border-slate-900/30 border-t-slate-900' : 'border-white/30 border-t-white'}`}></div>
+                ) : (
+                  'Crear Proyecto'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Right Panel: Beautiful Dark Decor */}
+      <div className="hidden lg:flex w-[45%] xl:w-[35%] bg-[#0f0f13] relative overflow-hidden items-center justify-center rounded-l-[40px] m-4 shadow-2xl">
+        <div className="absolute top-[-20%] right-[-10%] w-[80%] h-[80%] bg-brand-500/20 rounded-full blur-[120px] pointer-events-none mix-blend-screen"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] bg-pink-500/20 rounded-full blur-[120px] pointer-events-none mix-blend-screen"></div>
+        
+        <div className="relative w-full max-w-sm aspect-square">
+           <div className="absolute top-[10%] left-[10%] w-[160px] h-[160px] bg-gradient-to-br from-[#2a2a35] to-[#1a1a24] rounded-3xl border border-white/5 shadow-2xl shadow-black/50 p-5 flex flex-col justify-between transform -rotate-6 animate-[float_6s_ease-in-out_infinite]">
+              <div className="w-10 h-10 rounded-2xl bg-brand-500/10 flex items-center justify-center">
+                 <Layout className="w-5 h-5 text-brand-400" />
+              </div>
+              <div>
+                <div className="w-16 h-1.5 bg-white/10 rounded-full mb-2"></div>
+                <div className="w-10 h-1.5 bg-white/5 rounded-full"></div>
+              </div>
+           </div>
+
+           <div className="absolute top-[40%] right-[10%] w-[180px] h-[180px] bg-gradient-to-br from-[#1a1a24] to-[#0a0a0f] rounded-3xl border border-white/5 shadow-2xl shadow-brand-500/10 p-5 flex flex-col justify-between transform rotate-12 animate-[float_8s_ease-in-out_infinite_reverse]">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-lg shadow-brand-500/30">
+                 <Database className="w-6 h-6 text-white" />
+              </div>
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                  <div className="w-20 h-1.5 bg-white/20 rounded-full"></div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-pink-500"></div>
+                  <div className="w-12 h-1.5 bg-white/10 rounded-full"></div>
+                </div>
+              </div>
+           </div>
+
+           <div className="absolute bottom-[10%] left-[25%] w-[120px] h-[120px] bg-[#1a1a24]/80 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl p-5 flex items-center justify-center transform -rotate-12 animate-[float_7s_ease-in-out_infinite]">
+              <div className="w-full h-full rounded-full border-4 border-dashed border-white/10 flex items-center justify-center">
+                 <ZapIcon className="w-8 h-8 text-slate-500" />
+              </div>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+}

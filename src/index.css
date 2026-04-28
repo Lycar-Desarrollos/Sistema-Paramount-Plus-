@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #f4f0ff;
+  --color-brand-100: #ebe4ff;
+  --color-brand-200: #d9cdff;
+  --color-brand-300: #bfa8ff;
+  --color-brand-400: #a178ff;
+  --color-brand-500: #8845ff;
+  --color-brand-600: #7a22ff;
+  --color-brand-700: #680ceb;
+  --color-brand-800: #550bbd;
+  --color-brand-900: #460a99;
+  
+  --color-dark-bg: #030305;
+  --color-dark-surface: #0a0a0f;
+  --color-dark-surface-hover: #13131a;
+  --color-dark-border: #1f1f2e;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-dark-bg);
+    color: #f8fafc;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    background: rgba(10, 10, 15, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  
+  .glass-card {
+    background: linear-gradient(145deg, rgba(30, 30, 40, 0.4) 0%, rgba(20, 20, 30, 0.2) 100%);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  .text-gradient {
+    background: linear-gradient(to right, #a178ff, #ff7eb3);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .hover-glow:hover {
+    box-shadow: 0 0 20px rgba(136, 69, 255, 0.4);
+    border-color: rgba(136, 69, 255, 0.5);
+  }
+
+  /* Custom Scrollbar for a premium feel */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}

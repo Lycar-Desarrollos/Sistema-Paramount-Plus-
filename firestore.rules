@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Autenticación básica
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Verificación de propiedad estricta (Airtable-like)
+    function isOwner(ownerId) {
+      return isAuthenticated() && request.auth.uid == ownerId;
+    }
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /workspaces/{workspaceId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /projects/{projectId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /bases/{baseId} {
+      allow read, write: if isOwner(resource.data.owner_id) || isOwner(request.resource.data.owner_id);
+    }
+
+    match /tables/{tableId} {
+      allow read, write: if isOwner(resource.data.owner_id) || isOwner(request.resource.data.owner_id);
+    }
+
+    match /records/{recordId} {
+      // Un registro solo se puede crear o modificar si el owner_id coincide con el del usuario autenticado
+      allow read, write: if isOwner(resource.data.owner_id) || isOwner(request.resource.data.owner_id);
+    }
+
+    match /campaigns/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /boards/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
