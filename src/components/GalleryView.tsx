@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Download, Heart, Share2, MoreVertical, Filter, Grid3X3, List } from 'lucide-react';
 

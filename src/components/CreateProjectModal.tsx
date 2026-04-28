@@ -7,7 +7,17 @@ interface Props {
   isDarkMode?: boolean;
 }
 
-const TEMPLATES = [
+interface TemplateItem {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+  columns?: string[];
+  labels?: Record<string, string>;
+}
+
+const TEMPLATES: TemplateItem[] = [
   {
     id: 'blank',
     title: 'En blanco',
@@ -75,8 +85,8 @@ export default function CreateProjectModal({ onClose, onCreate, isDarkMode = fal
     // Mejor le pasamos un array vacío si queremos que empiece sin nada, o undefined para usar el default de la BD.
     // Para que realmente sea "En blanco" le pasaremos arrays vacíos, así no tiene las columnas por defecto.
     const templateData = template?.id === 'blank' 
-      ? { columns: [], labels: {} } 
-      : (template?.columns ? { columns: template.columns, labels: template.labels! } : undefined);
+      ? { columns: [] as string[], labels: {} as Record<string, string> } 
+      : (template?.columns && template?.labels ? { columns: template.columns, labels: template.labels } : undefined);
 
     await onCreate(name.trim(), templateData);
     setIsLoading(false);

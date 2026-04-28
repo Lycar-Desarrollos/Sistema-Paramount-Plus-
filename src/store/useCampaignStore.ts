@@ -46,7 +46,7 @@ interface CampaignStore {
   error: string | null;
   initializeGlobal: () => () => void; 
   initializeProjectData: (projectId: string) => () => void; 
-  addProject: (name: string) => Promise<void>;
+  addProject: (name: string, template?: { columns: string[], labels: Record<string, string> }) => Promise<void>;
   addCampaign: () => Promise<void>;
   updateCampaignField: (id: string, field: string, value: any) => Promise<void>;
   updateColumnLabel: (field: string, label: string) => Promise<void>;

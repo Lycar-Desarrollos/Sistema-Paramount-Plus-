@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Group, ArrowDownUp, Settings, Trash2, CheckCircle2, Edit2 } from 'lucide-react';
-import { useCampaignStore, type Campaign, DEFAULT_CATEGORIES } from '../store/useCampaignStore';
+import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2 } from 'lucide-react';
+import { useCampaignStore, DEFAULT_CATEGORIES } from '../store/useCampaignStore';
 import { cn } from '../lib/utils';
 
 const COLORS = [

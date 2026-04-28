@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Database, Zap as ZapIcon, Layout, FormInput, Clock, Share2, Users, LogOut, Plus, CheckCircle2, Pencil, Sun, Moon } from 'lucide-react';
+import { Sparkles, Database, Zap as ZapIcon, Layout, FormInput, LogOut, Plus, CheckCircle2, Pencil, Sun, Moon } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import GridEngine from './components/GridEngine';
 import KanbanBoard from './components/KanbanBoard';
-import GalleryView from './components/GalleryView';
+
 import Login from './components/Login';
 import CreateProjectModal from './components/CreateProjectModal';
 import { useAuth } from './context/AuthContext';
@@ -411,6 +411,7 @@ export default function App() {
                <Dashboard title="Formularios" icon={FormInput} isDarkMode={isDarkMode} />
              </div>
           )}
+
         </div>
       </main>
     </div>
