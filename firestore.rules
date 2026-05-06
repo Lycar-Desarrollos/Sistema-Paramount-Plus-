@@ -1,46 +1,63 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Autenticación básica
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    // Verificación de propiedad estricta (Airtable-like)
-    function isOwner(ownerId) {
-      return isAuthenticated() && request.auth.uid == ownerId;
+
+    function isWorkspaceMember(workspaceId) {
+      let ws = get(/databases/$(database)/documents/workspaces/$(workspaceId));
+      return isAuthenticated() && (
+        ws.data.members == null || 
+        ws.data.members[request.auth.uid] != null
+      );
+    }
+
+    function getWorkspaceRole(workspaceId) {
+      return get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.members[request.auth.uid];
     }
 
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
     
     match /workspaces/{workspaceId} {
-      allow read, write: if isAuthenticated();
-    }
-    
-    match /projects/{projectId} {
-      allow read, write: if isAuthenticated();
-    }
-    match /bases/{baseId} {
-      allow read, write: if isOwner(resource.data.owner_id) || isOwner(request.resource.data.owner_id);
+      allow read: if true;
+      allow write: if isAuthenticated();
+      match /bases/{baseId} {
+        allow read: if true;
+        allow write: if isAuthenticated();
+      }
     }
 
     match /tables/{tableId} {
-      allow read, write: if isOwner(resource.data.owner_id) || isOwner(request.resource.data.owner_id);
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
-
-    match /records/{recordId} {
-      // Un registro solo se puede crear o modificar si el owner_id coincide con el del usuario autenticado
-      allow read, write: if isOwner(resource.data.owner_id) || isOwner(request.resource.data.owner_id);
-    }
-
+    
     match /campaigns/{docId} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
-
+    match /content_calendar/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+    match /lead_pipeline/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+    match /budget_tracker/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
     match /boards/{docId} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+    match /projects/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
   }
 }

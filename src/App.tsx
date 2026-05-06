@@ -1,26 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Database, Zap as ZapIcon, Layout, FormInput, LogOut, Plus, CheckCircle2, Pencil, Sun, Moon } from 'lucide-react';
+import { Sparkles, Database, Zap as ZapIcon, Layout, FormInput, LogOut, Plus, CheckCircle2, Pencil, Sun, Moon, Download, FileSpreadsheet, FileText, Clipboard, ChevronDown as ChevronDownIcon } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
+import { UserMenu } from './components/UserMenu';
 import Dashboard from './components/Dashboard';
 import GridEngine from './components/GridEngine';
 import KanbanBoard from './components/KanbanBoard';
 
 import Login from './components/Login';
 import CreateProjectModal from './components/CreateProjectModal';
+import CreateTableModal from './components/CreateTableModal';
+import CustomDialog from './components/CustomDialog';
+import SlackSettingsModal from './components/SlackSettingsModal';
+import GalleryView from './components/GalleryView';
+import MarketingHub from './pages/marketing/MarketingHub';
 import { useAuth } from './context/AuthContext';
 import { auth } from './firebase';
 import { signOut } from 'firebase/auth';
 
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, X, MessageSquare } from 'lucide-react';
 import { useCampaignStore } from './store/useCampaignStore';
 
-type MainTab = 'datos' | 'automatizaciones' | 'interfaces' | 'formularios';
+type MainTab = 'datos' | 'automatizaciones' | 'interfaces' | 'marketing';
 
 export default function App() {
-  const { user, userData, loading } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<MainTab>('datos');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [isCreateTableModalOpen, setIsCreateTableModalOpen] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isSlackModalOpen, setIsSlackModalOpen] = useState(false);
+  
+  const [dialogConfig, setDialogConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'confirm' | 'prompt' | 'danger';
+    onConfirm: (val?: string) => void;
+    defaultValue?: string;
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'confirm',
+    onConfirm: () => {},
+  });
   
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState('');
@@ -31,19 +58,34 @@ export default function App() {
   const [isAiSimulating, setIsAiSimulating] = useState(false);
   const [aiLoadingText, setAiLoadingText] = useState('');
 
-  const activeProjectId = useCampaignStore(state => state.activeProjectId);
-  const setActiveProjectId = useCampaignStore(state => state.setActiveProjectId);
-  const projects = useCampaignStore(state => state.projects);
-  const initializeGlobal = useCampaignStore(state => state.initializeGlobal);
-  const addProject = useCampaignStore(state => state.addProject);
-  const updateProjectName = useCampaignStore(state => state.updateProjectName);
-  const deleteProject = useCampaignStore(state => state.deleteProject);
-  
+  const { 
+    activeProjectId, setActiveProjectId, 
+    activeTableId, setActiveTableId,
+    projects, tables, campaigns, 
+    initializeGlobal, initializeProjectData, initializeTableData,
+    addProject, addTable, updateTable, deleteTable,
+    addCampaign, updateCampaignField, 
+    updateProjectName, deleteProject,
+    loading: dataLoading 
+  } = useCampaignStore();
+
   useEffect(() => {
     if (!user) return;
     const unsub = initializeGlobal();
     return () => unsub();
   }, [user, initializeGlobal]);
+
+  useEffect(() => {
+    if (!user || !activeProjectId) return;
+    const unsub = initializeProjectData(activeProjectId);
+    return () => unsub();
+  }, [user, activeProjectId, initializeProjectData]);
+
+  useEffect(() => {
+    if (!user || !activeTableId) return;
+    const unsub = initializeTableData(activeTableId);
+    return () => unsub();
+  }, [user, activeTableId, initializeTableData]);
 
   const handleRenameSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -70,9 +112,51 @@ export default function App() {
     }
   };
 
-  const activeProject = projects.find(p => p.id === activeProjectId) || projects[0] || { name: 'Cargando...' };
+  const handleExport = (format: 'xlsx' | 'csv' | 'copy') => {
+    if (!activeTable || campaigns.length === 0) return;
+    
+    // Map data to readable format using column labels
+    const exportData = campaigns.map(row => {
+      const mapped: Record<string, any> = {};
+      const labels = activeTable.columnLabels || {};
+      const columns = activeTable.columns || [];
+      
+      columns.forEach(col => {
+        mapped[labels[col] || col] = row[col];
+      });
+      
+      return mapped;
+    });
 
-  if (loading) {
+    if (format === 'xlsx') {
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, activeTable.name || 'Datos');
+      XLSX.writeFile(workbook, `${activeTable.name || 'export'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } else if (format === 'csv') {
+      const csv = Papa.unparse(exportData);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${activeTable.name || 'export'}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (format === 'copy') {
+      const text = JSON.stringify(exportData, null, 2);
+      navigator.clipboard.writeText(text);
+      alert('Datos copiados al portapapeles');
+    }
+    
+    setShowExportMenu(false);
+  };
+
+  const activeProject = projects.find(p => p.id === activeProjectId) || projects[0] || { name: 'Cargando...' };
+  const activeTable = tables.find(t => t.id === activeTableId) || tables[0];
+
+  if (authLoading || dataLoading) {
     return <div className="h-screen w-screen flex items-center justify-center bg-[#030305]"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div></div>;
   }
 
@@ -102,12 +186,27 @@ export default function App() {
       {isCreatingProject && (
         <CreateProjectModal 
           onClose={() => setIsCreatingProject(false)} 
-          onCreate={async (name, template) => {
+          onCreate={async (name, template, rows) => {
             await addProject(name, template);
+            if (rows && rows.length > 0) {
+              const state = useCampaignStore.getState();
+              const newProjectId = state.activeProjectId;
+              const newTableId = state.activeTableId;
+              if (newProjectId && newTableId) {
+                await state.importRows(newProjectId, newTableId, rows);
+              }
+            }
           }} 
           isDarkMode={isDarkMode}
         />
       )}
+
+      {/* Slack Settings Modal */}
+      <SlackSettingsModal 
+        isOpen={isSlackModalOpen} 
+        onClose={() => setIsSlackModalOpen(false)} 
+        isDarkMode={isDarkMode} 
+      />
 
       {/* Workspace Switcher Modal */}
       {isWorkspaceModalOpen && (
@@ -321,7 +420,7 @@ export default function App() {
             { id: 'datos', label: 'Datos', icon: Database },
             { id: 'automatizaciones', label: 'Automatizaciones', icon: ZapIcon },
             { id: 'interfaces', label: 'Interfaces', icon: Layout },
-            { id: 'formularios', label: 'Formularios', icon: FormInput }
+            { id: 'marketing', label: 'Marketing', icon: Sparkles }
           ].map(tab => (
             <button
               key={tab.id}
@@ -356,6 +455,15 @@ export default function App() {
             </button>
           </div>
 
+          {/* Slack Toggle */}
+          <button 
+            onClick={() => setIsSlackModalOpen(true)}
+            className={`p-2 rounded-full transition-colors ${isDarkMode ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'}`}
+            title="Configurar Integración de Slack"
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
+
           {/* Theme Toggle */}
           <button 
             onClick={() => setIsDarkMode(!isDarkMode)}
@@ -365,22 +473,7 @@ export default function App() {
             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
           
-          <div className="flex items-center gap-2 ml-2 pl-2 border-l border-white/10">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-medium text-white">{userData?.role === 'administrador' ? 'Admin' : 'Ops'}</p>
-              <p className="text-[10px] text-slate-400 max-w-[100px] truncate">{user.email}</p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-pink-500 text-white flex items-center justify-center text-sm font-bold border border-white/10 shadow-sm cursor-pointer" title={user.email || 'User'}>
-              {user.email?.charAt(0).toUpperCase() || 'U'}
-            </div>
-            <button 
-              onClick={() => signOut(auth)}
-              className="p-2 ml-1 rounded-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+          <UserMenu user={user} userData={userData} isDarkMode={isDarkMode} />
         </div>
       </header>
 
@@ -395,10 +488,146 @@ export default function App() {
         )}
 
         <div className="flex-1 overflow-auto flex flex-col">
-          {currentTab === 'datos' && <GridEngine isDarkMode={isDarkMode} />}
+          {currentTab === 'datos' && (
+            <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Table Tabs Bar (Airtable Style) */}
+        <div className={`flex items-center px-6 border-b h-12 transition-colors ${isDarkMode ? 'bg-[#0f0f13] border-white/5' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar h-full mr-4">
+            {tables.map(table => (
+              <div
+                key={table.id}
+                onClick={() => setActiveTableId(table.id)}
+                className={`group relative flex items-center h-full px-5 text-xs font-bold cursor-pointer transition-all border-b-2 ${
+                  activeTableId === table.id
+                    ? (isDarkMode ? 'text-white border-[#f35a1a]' : 'text-slate-900 border-[#f35a1a]')
+                    : (isDarkMode ? 'text-slate-500 border-transparent hover:text-slate-300' : 'text-slate-500 border-transparent hover:text-slate-900')
+                }`}
+              >
+                <span>{table.name}</span>
+                
+                {/* Rename/Delete Actions (visible on hover) */}
+                <div className="flex items-center ml-2 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDialogConfig({
+                        isOpen: true,
+                        title: 'Renombrar tabla',
+                        message: 'Ingresa el nuevo nombre para esta tabla:',
+                        type: 'prompt',
+                        defaultValue: table.name,
+                        onConfirm: (newName) => {
+                          if (newName) updateTable(table.id, newName);
+                        }
+                      });
+                    }}
+                    className={`p-1 rounded-md transition-colors ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
+                  >
+                    <Pencil className="w-3 h-3 text-slate-500" />
+                  </button>
+                  {tables.length > 1 && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDialogConfig({
+                          isOpen: true,
+                          title: 'Eliminar tabla',
+                          message: '¿Estás seguro de que deseas eliminar esta tabla permanentemente? Esta acción no se puede deshacer.',
+                          type: 'danger',
+                          confirmText: 'Eliminar',
+                          onConfirm: () => deleteTable(table.id)
+                        });
+                      }}
+                      className={`p-1 rounded-md transition-colors ${isDarkMode ? 'hover:bg-red-500/10 hover:text-red-500' : 'hover:bg-red-50 hover:text-red-600'}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            <button 
+              onClick={() => setIsCreateTableModalOpen(true)}
+              className={`flex items-center gap-2 px-4 h-full text-xs font-bold transition-all border-b-2 border-transparent ${
+                isDarkMode ? 'text-slate-500 hover:text-brand-400 hover:bg-white/5' : 'text-slate-500 hover:text-brand-600 hover:bg-slate-50'
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add or import</span>
+            </button>
+          </div>
+
+          <div className="flex-1"></div>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                isDarkMode 
+                  ? 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white' 
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900'
+              } ${showExportMenu ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-slate-200 text-slate-900') : ''}`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Exportar</span>
+              <ChevronDownIcon className={`w-3 h-3 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showExportMenu && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setShowExportMenu(false)}></div>
+                <div className={`absolute right-0 mt-2 w-48 rounded-xl shadow-2xl z-40 border animate-in fade-in zoom-in-95 duration-200 ${
+                  isDarkMode ? 'bg-[#1a1a24] border-white/10 shadow-black' : 'bg-white border-slate-200 shadow-slate-200'
+                }`}>
+                  <div className="p-1.5 space-y-0.5">
+                    <button
+                      onClick={() => handleExport('xlsx')}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                        isDarkMode ? 'hover:bg-white/5 text-slate-300 hover:text-white' : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                      Excel (.xlsx)
+                    </button>
+                    <button
+                      onClick={() => handleExport('csv')}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                        isDarkMode ? 'hover:bg-white/5 text-slate-300 hover:text-white' : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <FileText className="w-4 h-4 text-brand-500" />
+                      CSV (.csv)
+                    </button>
+                    <div className={`h-px my-1 ${isDarkMode ? 'bg-white/5' : 'bg-slate-100'}`}></div>
+                    <button
+                      onClick={() => handleExport('copy')}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                        isDarkMode ? 'hover:bg-white/5 text-slate-300 hover:text-white' : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Clipboard className="w-4 h-4 text-slate-400" />
+                      Copiar datos
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+              <GridEngine 
+                data={campaigns} 
+                columns={useCampaignStore.getState().columns}
+                columnLabels={useCampaignStore.getState().columnLabels}
+                loading={dataLoading}
+                isDarkMode={isDarkMode}
+              />
+            </main>
+          )}
           {currentTab === 'interfaces' && (
-             <div className="p-8">
-               <Dashboard title="Interfaces" icon={Layout} isDarkMode={isDarkMode} />
+             <div className="p-8 h-full overflow-y-auto">
+               <GalleryView isDarkMode={isDarkMode} />
              </div>
           )}
           {currentTab === 'automatizaciones' && (
@@ -406,13 +635,35 @@ export default function App() {
                <KanbanBoard isDarkMode={isDarkMode} />
              </div>
           )}
-          {currentTab === 'formularios' && (
-             <div className="p-8 h-full">
-               <Dashboard title="Formularios" icon={FormInput} isDarkMode={isDarkMode} />
+          {currentTab === 'marketing' && (
+             <div className="h-full overflow-hidden">
+               <MarketingHub isDarkMode={isDarkMode} />
              </div>
           )}
 
         </div>
+
+        {isCreateTableModalOpen && (
+          <CreateTableModal
+            onClose={() => setIsCreateTableModalOpen(false)}
+            onCreate={async (name, template, rows) => {
+              await addTable(activeProjectId, name, template, rows);
+            }}
+            isDarkMode={isDarkMode}
+          />
+        )}
+
+        <CustomDialog
+          isOpen={dialogConfig.isOpen}
+          onClose={() => setDialogConfig(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={dialogConfig.onConfirm}
+          title={dialogConfig.title}
+          message={dialogConfig.message}
+          type={dialogConfig.type}
+          defaultValue={dialogConfig.defaultValue}
+          confirmText={dialogConfig.confirmText}
+          isDarkMode={isDarkMode}
+        />
       </main>
     </div>
   );

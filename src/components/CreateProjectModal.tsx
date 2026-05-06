@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { X, Layout, Database, Zap as ZapIcon, Briefcase, Code, Megaphone, Users, ArrowRight, ArrowLeft } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Layout, Database, Zap as ZapIcon, Briefcase, Code, Megaphone, Users, ArrowRight, ArrowLeft, Upload, FileText, Table } from 'lucide-react';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 interface Props {
   onClose: () => void;
-  onCreate: (name: string, template?: { columns: string[], labels: Record<string, string> }) => Promise<void>;
+  onCreate: (name: string, template?: { columns: string[], labels: Record<string, string> }, rows?: any[]) => Promise<void>;
   isDarkMode?: boolean;
 }
 
@@ -60,6 +62,13 @@ const TEMPLATES: TemplateItem[] = [
     color: 'from-pink-400 to-pink-600',
     columns: ['resume', 'interview', 'technical', 'offer', 'hired'],
     labels: { resume: 'CV Revisado', interview: '1ra Entrevista', technical: 'Prueba Técnica', offer: 'Oferta', hired: 'Contratado' }
+  },
+  {
+    id: 'import',
+    title: 'Importar archivo',
+    description: 'Crea una tabla desde un archivo Excel o CSV.',
+    icon: <Upload className="w-6 h-6" />,
+    color: 'from-blue-400 to-indigo-600'
   }
 ];
 
@@ -68,6 +77,81 @@ export default function CreateProjectModal({ onClose, onCreate, isDarkMode = fal
   const [name, setName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('blank');
   const [isLoading, setIsLoading] = useState(false);
+  const [importedData, setImportedData] = useState<{ columns: string[], labels: Record<string, string>, rows: any[] } | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const importRef = useRef<HTMLDivElement>(null);
+  const step2Ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (step === 2 && step2Ref.current) {
+      setTimeout(() => {
+        step2Ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [step]);
+
+  useEffect(() => {
+    if (selectedTemplateId === 'import' && importRef.current) {
+      setTimeout(() => {
+        importRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [selectedTemplateId]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    const reader = new FileReader();
+
+    if (file.name.endsWith('.csv')) {
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        Papa.parse(text, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            processData(results.data);
+          }
+        });
+      };
+      reader.readAsText(file);
+    } else {
+      reader.onload = (event) => {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+        processData(json);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  };
+
+  const processData = (data: any[]) => {
+    if (data.length === 0) return;
+    
+    // Detect columns from the first object
+    const keys = Object.keys(data[0]);
+    const columns = keys.map(k => k.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''));
+    const labels: Record<string, string> = {};
+    keys.forEach((k, i) => {
+      labels[columns[i]] = k;
+    });
+
+    // Map rows to the new column names
+    const rows = data.map(item => {
+      const newItem: any = {};
+      keys.forEach((k, i) => {
+        newItem[columns[i]] = item[k];
+      });
+      return newItem;
+    });
+
+    setImportedData({ columns, labels, rows });
+  };
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,14 +165,25 @@ export default function CreateProjectModal({ onClose, onCreate, isDarkMode = fal
     
     const template = TEMPLATES.find(t => t.id === selectedTemplateId);
     
-    // Si es "En blanco", pasamos undefined para que use los default estáticos o un array vacío según useCampaignStore
-    // Mejor le pasamos un array vacío si queremos que empiece sin nada, o undefined para usar el default de la BD.
-    // Para que realmente sea "En blanco" le pasaremos arrays vacíos, así no tiene las columnas por defecto.
-    const templateData = template?.id === 'blank' 
-      ? { columns: [] as string[], labels: {} as Record<string, string> } 
-      : (template?.columns && template?.labels ? { columns: template.columns, labels: template.labels } : undefined);
+    let templateData;
+    if (selectedTemplateId === 'import' && importedData) {
+      templateData = { columns: importedData.columns, labels: importedData.labels };
+    } else if (template?.id === 'blank') {
+      templateData = { columns: [] as string[], labels: {} as Record<string, string> };
+    } else if (template?.columns && template?.labels) {
+      templateData = { columns: template.columns, labels: template.labels };
+    }
 
-    await onCreate(name.trim(), templateData);
+    // Aquí llamaríamos a onCreate. 
+    // Ahora pasamos también las filas importadas si existen.
+    await onCreate(name.trim(), templateData, importedData?.rows);
+    
+    // Si hay datos importados, podríamos insertarlos aquí uno por uno si el store no soporta bulk.
+    // Pero por UX, es mejor que el store soporte bulk o hacerlo aquí.
+    if (selectedTemplateId === 'import' && importedData) {
+       // Logic to add rows would go here or be handled by onCreate extension
+       console.log("Importing rows:", importedData.rows.length);
+    }
     setIsLoading(false);
     onClose();
   };
@@ -161,7 +256,10 @@ export default function CreateProjectModal({ onClose, onCreate, isDarkMode = fal
             </form>
           </div>
         ) : (
-          <div className="w-full max-w-2xl mt-24 pb-12 animate-in fade-in slide-in-from-right-4 duration-500">
+          <div 
+            ref={step2Ref}
+            className="w-full max-w-2xl mt-24 pb-12 animate-in fade-in slide-in-from-right-4 duration-500"
+          >
             <button 
               onClick={() => setStep(1)}
               className={`mb-8 flex items-center gap-2 text-sm font-medium transition-colors ${isDarkMode ? 'text-slate-500 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}
@@ -208,6 +306,85 @@ export default function CreateProjectModal({ onClose, onCreate, isDarkMode = fal
                 </button>
               ))}
             </div>
+
+            {selectedTemplateId === 'import' && (
+              <div 
+                ref={importRef}
+                className={`mb-12 p-8 rounded-[32px] border-2 border-dashed transition-all ${
+                importedData 
+                  ? (isDarkMode ? 'border-brand-500/50 bg-brand-500/5' : 'border-brand-500/50 bg-brand-50')
+                  : (isDarkMode ? 'border-white/10 hover:border-white/20 bg-white/5' : 'border-slate-200 hover:border-slate-300 bg-slate-50')
+              }`}>
+                {!importedData ? (
+                  <div className="flex flex-col items-center justify-center text-center">
+                    <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-4 ${isDarkMode ? 'bg-white/5' : 'bg-white shadow-sm'}`}>
+                      <Upload className="w-8 h-8 text-brand-500" />
+                    </div>
+                    <h3 className={`text-lg font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Subir archivo</h3>
+                    <p className={`text-sm mb-6 max-w-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Arrastra tu archivo CSV o Excel aquí para detectar automáticamente las columnas.
+                    </p>
+                    <input
+                      type="file"
+                      accept=".csv, .xlsx, .xls"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className={`px-8 py-2.5 rounded-full text-sm font-semibold cursor-pointer transition-all ${
+                        isDarkMode 
+                          ? 'bg-white text-slate-900 hover:bg-slate-200 shadow-lg shadow-white/5' 
+                          : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg'
+                      }`}
+                    >
+                      Seleccionar archivo
+                    </label>
+                  </div>
+                ) : (
+                  <div className="animate-in fade-in zoom-in-95 duration-300">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                          <Table className="w-5 h-5 text-emerald-500" />
+                        </div>
+                        <div>
+                          <h3 className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{fileName}</h3>
+                          <p className="text-xs text-slate-500">{importedData.rows.length} filas detectadas</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => { setImportedData(null); setFileName(null); }}
+                        className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/10' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'}`}
+                      >
+                        Cambiar archivo
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <p className={`text-[11px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                        Columnas detectadas
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {importedData.columns.map((col, i) => (
+                          <div 
+                            key={col}
+                            className={`px-3 py-1.5 rounded-xl border text-[13px] font-medium flex items-center gap-2 ${
+                              isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <FileText className="w-3.5 h-3.5 text-brand-400" />
+                            {importedData.labels[col]}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
 
             <div className="flex items-center justify-end">
               <button

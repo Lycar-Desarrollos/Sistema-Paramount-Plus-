@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, query, where, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 
 export interface Project {
   id: string;
@@ -8,9 +8,19 @@ export interface Project {
   createdAt: number;
 }
 
+export interface Table {
+  id: string;
+  projectId: string;
+  name: string;
+  columns: string[];
+  columnLabels: Record<string, string>;
+  createdAt: number;
+}
+
 export interface Campaign {
   id: string;
   projectId: string;
+  tableId: string;
   title: string;
   category: string | null;
   [key: string]: any; // Allow dynamic column keys
@@ -37,8 +47,11 @@ export const DEFAULT_LABELS: Record<string, string> = {
 
 interface CampaignStore {
   activeProjectId: string;
+  activeTableId: string;
   setActiveProjectId: (id: string) => void;
+  setActiveTableId: (id: string) => void;
   projects: Project[];
+  tables: Table[];
   campaigns: Campaign[];
   columns: string[];
   columnLabels: Record<string, string>;
@@ -46,7 +59,11 @@ interface CampaignStore {
   error: string | null;
   initializeGlobal: () => () => void; 
   initializeProjectData: (projectId: string) => () => void; 
+  initializeTableData: (tableId: string) => () => void;
   addProject: (name: string, template?: { columns: string[], labels: Record<string, string> }) => Promise<void>;
+  addTable: (projectId: string, name: string, template?: { columns: string[], labels: Record<string, string> }) => Promise<void>;
+  updateTable: (id: string, name: string) => Promise<void>;
+  deleteTable: (id: string) => Promise<void>;
   addCampaign: () => Promise<void>;
   updateCampaignField: (id: string, field: string, value: any) => Promise<void>;
   updateColumnLabel: (field: string, label: string) => Promise<void>;
@@ -55,18 +72,24 @@ interface CampaignStore {
   deleteColumn: (id: string) => Promise<void>;
   updateProjectName: (id: string, newName: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
+  importRows: (projectId: string, tableId: string, rows: any[]) => Promise<void>;
 }
 
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
   activeProjectId: 'lat-br', 
+  activeTableId: '',
   setActiveProjectId: (id: string) => {
     set({ activeProjectId: id, loading: true });
   },
+  setActiveTableId: (id: string) => {
+    set({ activeTableId: id, loading: true });
+  },
   projects: [],
+  tables: [],
   campaigns: [],
   columns: DEFAULT_COLUMNS,
   columnLabels: DEFAULT_LABELS,
-  loading: true,
+  loading: false,
   error: null,
 
   initializeGlobal: () => {
@@ -77,7 +100,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       })) as Project[];
       
       const sorted = fetchedProjects.sort((a, b) => a.createdAt - b.createdAt);
-      set({ projects: sorted });
+      set({ projects: sorted, loading: false });
 
       if (sorted.length === 0) {
         get().addProject('Campaign Tracker - LAT & BR');
@@ -92,54 +115,83 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   },
 
   initializeProjectData: (projectId: string) => {
+    // Only set loading if we don't have tables for this project yet
+    if (get().tables.length === 0) set({ loading: true });
+    
+    const qTables = query(collection(db, 'tables'), where('projectId', '==', projectId));
+    const unsubTables = onSnapshot(qTables, (snapshot) => {
+      const fetchedTables = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Table[];
+      
+      const sorted = fetchedTables.sort((a, b) => a.createdAt - b.createdAt);
+      set({ tables: sorted });
+
+      if (sorted.length === 0) {
+        get().addTable(projectId, 'Table 1');
+      } else {
+        const currentActive = get().activeTableId;
+        const firstTableId = sorted[0].id;
+        
+        if (currentActive !== firstTableId && !sorted.find(t => t.id === currentActive)) {
+          set({ activeTableId: firstTableId });
+        } else {
+          // If we already have the correct table active, we might need to clear loading
+          // if initializeTableData isn't going to be triggered by App.tsx
+          set({ loading: false });
+        }
+      }
+    });
+
+    return unsubTables;
+  },
+
+  initializeTableData: (tableId: string) => {
     set({ loading: true });
-    const unsubProject = onSnapshot(doc(db, 'projects', projectId), (docSnap) => {
+    
+    const unsubTable = onSnapshot(doc(db, 'tables', tableId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         set({ 
           columnLabels: { ...DEFAULT_LABELS, ...(data.columnLabels || {}) },
           columns: data.columns || DEFAULT_COLUMNS
         });
-      } else {
-        set({ columnLabels: DEFAULT_LABELS, columns: DEFAULT_COLUMNS });
       }
     });
 
-    const q = query(collection(db, 'campaigns'), where('projectId', '==', projectId));
-    const unsubCampaigns = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Campaign[];
-        fetchedData.sort((a,b) => b.createdAt - a.createdAt);
-        set({ campaigns: fetchedData, loading: false, error: null });
-      },
-      (error) => {
-        console.error('Firestore Error:', error);
-        set({ error: error.message, loading: false });
-      }
-    );
-    
+    const qRecords = query(collection(db, 'campaigns'), where('tableId', '==', tableId));
+    const unsubRecords = onSnapshot(qRecords, (snapshot) => {
+      const fetchedData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Campaign[];
+      fetchedData.sort((a,b) => b.createdAt - a.createdAt);
+      set({ campaigns: fetchedData, loading: false, error: null });
+    }, (error) => {
+      console.error('Firestore Error:', error);
+      set({ error: error.message, loading: false });
+    });
+
     return () => {
-      unsubProject();
-      unsubCampaigns();
+      unsubTable();
+      unsubRecords();
     };
   },
 
   addProject: async (name: string, template?: { columns: string[], labels: Record<string, string> }) => {
     try {
+      const user = auth.currentUser;
       const newRef = await addDoc(collection(db, 'workspaces'), {
         name,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        members: user ? { [user.uid]: 'owner' } : {}
       });
       
       if (template) {
-        await setDoc(doc(db, 'projects', newRef.id), {
-          columns: template.columns,
-          columnLabels: template.labels
-        });
+        await get().addTable(newRef.id, 'Main Table', template);
+      } else {
+        await get().addTable(newRef.id, 'Table 1');
       }
       
       set({ activeProjectId: newRef.id });
@@ -148,12 +200,62 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     }
   },
 
+  addTable: async (projectId: string, name: string, template?: { columns: string[], labels: Record<string, string> }, initialRows?: any[]) => {
+    try {
+      const newRef = await addDoc(collection(db, 'tables'), {
+        projectId,
+        name,
+        columns: template?.columns || DEFAULT_COLUMNS,
+        columnLabels: template?.labels || DEFAULT_LABELS,
+        createdAt: Date.now()
+      });
+      set({ activeTableId: newRef.id });
+
+      // If we have initial rows, add them
+      if (initialRows && initialRows.length > 0) {
+        const promises = initialRows.map(row => 
+          addDoc(collection(db, 'campaigns'), {
+            ...row,
+            projectId,
+            tableId: newRef.id,
+            createdAt: Date.now()
+          })
+        );
+        await Promise.all(promises);
+      }
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  updateTable: async (id: string, name: string) => {
+    try {
+      await updateDoc(doc(db, 'tables', id), { name });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  deleteTable: async (id: string) => {
+    try {
+      const { tables, activeTableId } = get();
+      await deleteDoc(doc(db, 'tables', id));
+      if (activeTableId === id) {
+        const remaining = tables.filter(t => t.id !== id);
+        if (remaining.length > 0) set({ activeTableId: remaining[0].id });
+      }
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
   addCampaign: async () => {
-    const { activeProjectId } = get();
+    const { activeProjectId, activeTableId } = get();
     const tempId = `temp-${Date.now()}`;
     const newRow: Campaign = {
       id: tempId,
       projectId: activeProjectId,
+      tableId: activeTableId,
       title: '',
       category: null,
       createdAt: Date.now(),
@@ -192,15 +294,15 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   },
 
   updateColumnLabel: async (field: string, label: string) => {
-    const { activeProjectId, columnLabels } = get();
+    const { activeTableId, columnLabels } = get();
     const previousLabels = columnLabels;
     
     set({ columnLabels: { ...columnLabels, [field]: label } });
     
     try {
-      await setDoc(doc(db, 'projects', activeProjectId), {
+      await updateDoc(doc(db, 'tables', activeTableId), {
         columnLabels: { [field]: label }
-      }, { merge: true });
+      });
     } catch (error: any) {
       console.error(error);
       set({ columnLabels: previousLabels, error: `Error saving column name` });
@@ -225,7 +327,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   },
 
   addColumn: async (name: string) => {
-    const { activeProjectId, columns, columnLabels } = get();
+    const { activeTableId, columns, columnLabels } = get();
     const newColId = `col_${Date.now()}`;
     const newColumns = [...columns, newColId];
     
@@ -233,28 +335,28 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       columns: newColumns, 
       columnLabels: { ...columnLabels, [newColId]: name } 
     });
-
+ 
     try {
-      await setDoc(doc(db, 'projects', activeProjectId), {
+      await updateDoc(doc(db, 'tables', activeTableId), {
         columns: newColumns,
         columnLabels: { [newColId]: name }
-      }, { merge: true });
+      });
     } catch (error: any) {
       set({ error: `Error al añadir columna` });
       setTimeout(() => set({ error: null }), 3000);
     }
   },
-
+ 
   deleteColumn: async (id: string) => {
-    const { activeProjectId, columns } = get();
+    const { activeTableId, columns } = get();
     const newColumns = columns.filter(c => c !== id);
     
     set({ columns: newColumns });
-
+ 
     try {
-      await setDoc(doc(db, 'projects', activeProjectId), {
+      await updateDoc(doc(db, 'tables', activeTableId), {
         columns: newColumns
-      }, { merge: true });
+      });
     } catch (error: any) {
       set({ error: `Error al eliminar columna` });
       setTimeout(() => set({ error: null }), 3000);
@@ -295,6 +397,30 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       console.error("Error deleting project:", error);
       set({ error: `Error al eliminar espacio` });
       setTimeout(() => set({ error: null }), 3000);
+    }
+  },
+  
+  importRows: async (projectId: string, tableId: string, rows: any[]) => {
+    try {
+      const chunks = [];
+      const chunkSize = 50;
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        chunks.push(rows.slice(i, i + chunkSize));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.all(chunk.map(row => 
+          addDoc(collection(db, 'campaigns'), {
+            ...row,
+            projectId,
+            tableId,
+            createdAt: Date.now()
+          })
+        ));
+      }
+    } catch (error: any) {
+      console.error("Error importing rows:", error);
+      set({ error: `Error al importar datos: ${error.message}` });
     }
   }
 }));
