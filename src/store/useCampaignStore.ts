@@ -15,6 +15,7 @@ export interface Table {
   columns: string[];
   columnLabels: Record<string, string>;
   createdAt: number;
+  favoriteBy?: string[];
 }
 
 export interface Campaign {
@@ -57,7 +58,7 @@ interface CampaignStore {
   columnLabels: Record<string, string>;
   loading: boolean;
   error: string | null;
-  initializeGlobal: () => () => void; 
+  initializeGlobal: (user: any, userData: any) => () => void; 
   initializeProjectData: (projectId: string) => () => void; 
   initializeTableData: (tableId: string) => () => void;
   addProject: (name: string, template?: { columns: string[], labels: Record<string, string> }) => Promise<void>;
@@ -72,7 +73,13 @@ interface CampaignStore {
   deleteColumn: (id: string) => Promise<void>;
   updateProjectName: (id: string, newName: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
+  addMemberToProject: (projectId: string, email: string) => Promise<void>;
+  removeMemberFromProject: (projectId: string, email: string) => Promise<void>;
+  toggleFavoriteProject: (projectId: string, email: string) => Promise<void>;
   importRows: (projectId: string, tableId: string, rows: any[]) => Promise<void>;
+  toggleTableFavorite: (tableId: string) => Promise<void>;
+  isProMode: boolean;
+  setIsProMode: (val: boolean) => void;
 }
 
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
@@ -91,20 +98,33 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   columnLabels: DEFAULT_LABELS,
   loading: false,
   error: null,
+  isProMode: false,
+  setIsProMode: (val: boolean) => set({ isProMode: val }),
 
-  initializeGlobal: () => {
+  initializeGlobal: (user: any, userData: any) => {
     const unsubProjects = onSnapshot(collection(db, 'workspaces'), (snapshot) => {
-      const fetchedProjects = snapshot.docs.map(doc => ({
+      let fetchedProjects = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Project[];
       
+      // Filter projects based on role
+      if (userData?.role === 'colaborador' || userData?.role === 'cliente') {
+        const userEmail = user?.email?.toLowerCase();
+        fetchedProjects = fetchedProjects.filter(p => {
+          // Si es dueño original (por uid) o está en la lista de memberEmails
+          const isOwner = p.members && p.members[user?.uid];
+          const isMember = p.memberEmails && p.memberEmails.includes(userEmail);
+          return isOwner || isMember;
+        });
+      }
+      
       const sorted = fetchedProjects.sort((a, b) => a.createdAt - b.createdAt);
       set({ projects: sorted, loading: false });
 
-      if (sorted.length === 0) {
+      if (sorted.length === 0 && userData?.role === 'admin') {
         get().addProject('Campaign Tracker - LAT & BR');
-      } else {
+      } else if (sorted.length > 0) {
         if (!sorted.find(p => p.id === get().activeProjectId)) {
           set({ activeProjectId: sorted[0].id });
         }
@@ -185,7 +205,8 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       const newRef = await addDoc(collection(db, 'workspaces'), {
         name,
         createdAt: Date.now(),
-        members: user ? { [user.uid]: 'owner' } : {}
+        members: user ? { [user.uid]: 'owner' } : {},
+        memberEmails: user && user.email ? [user.email.toLowerCase()] : []
       });
       
       if (template) {
@@ -363,6 +384,28 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     }
   },
 
+  toggleTableFavorite: async (tableId: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) return;
+      const email = user.email.toLowerCase();
+      
+      const table = get().tables.find(t => t.id === tableId);
+      if (!table) return;
+
+      const favs = table.favoriteBy || [];
+      const newFavs = favs.includes(email)
+        ? favs.filter(e => e !== email)
+        : [...favs, email];
+
+      await updateDoc(doc(db, 'tables', tableId), {
+        favoriteBy: newFavs
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
   updateProjectName: async (id: string, newName: string) => {
     const previousProjects = get().projects;
     
@@ -397,6 +440,52 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       console.error("Error deleting project:", error);
       set({ error: `Error al eliminar espacio` });
       setTimeout(() => set({ error: null }), 3000);
+    }
+  },
+
+  addMemberToProject: async (projectId: string, email: string) => {
+    try {
+      const proj = get().projects.find(p => p.id === projectId);
+      if (!proj) return;
+      const currentEmails = proj.memberEmails || [];
+      if (!currentEmails.includes(email.toLowerCase())) {
+        await updateDoc(doc(db, 'workspaces', projectId), {
+          memberEmails: [...currentEmails, email.toLowerCase()]
+        });
+      }
+    } catch (error: any) {
+      console.error(error);
+      set({ error: 'Error al añadir colaborador' });
+      setTimeout(() => set({ error: null }), 3000);
+    }
+  },
+
+  removeMemberFromProject: async (projectId: string, email: string) => {
+    try {
+      const proj = get().projects.find(p => p.id === projectId);
+      if (!proj) return;
+      const currentEmails = proj.memberEmails || [];
+      await updateDoc(doc(db, 'workspaces', projectId), {
+        memberEmails: currentEmails.filter(e => e !== email.toLowerCase())
+      });
+    } catch (error: any) {
+      console.error(error);
+    }
+  },
+
+  toggleFavoriteProject: async (projectId: string, email: string) => {
+    try {
+      const proj = get().projects.find(p => p.id === projectId);
+      if (!proj) return;
+      const favs = proj.favoriteBy || [];
+      const emailLower = email.toLowerCase();
+      const isFav = favs.includes(emailLower);
+      
+      await updateDoc(doc(db, 'workspaces', projectId), {
+        favoriteBy: isFav ? favs.filter(e => e !== emailLower) : [...favs, emailLower]
+      });
+    } catch (error: any) {
+      console.error("Error toggling favorite:", error);
     }
   },
   

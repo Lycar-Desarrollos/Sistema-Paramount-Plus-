@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2 } from 'lucide-react';
 import { useCampaignStore, DEFAULT_CATEGORIES } from '../store/useCampaignStore';
 import { cn } from '../lib/utils';
+import { useTheme } from '../context/ThemeContext';
 
 const COLORS = [
   'bg-pink-500/20 text-pink-300 border-pink-500/30',
@@ -30,7 +31,8 @@ const Tag = ({ children, colorClass, onClick }: { children: React.ReactNode, col
   );
 };
 
-const EditableHeader = ({ field, minW = '90px', onDelete, isDarkMode = true }: { field: string, minW?: string, onDelete?: (field: string) => void, isDarkMode?: boolean }) => {
+const EditableHeader = ({ field, minW = '90px', onDelete }: { field: string, minW?: string, onDelete?: (field: string) => void }) => {
+  const { isDarkMode } = useTheme();
   const label = useCampaignStore(state => state.columnLabels[field]);
   const updateColumnLabel = useCampaignStore(state => state.updateColumnLabel);
   const [isEditing, setIsEditing] = useState(false);
@@ -85,7 +87,8 @@ const EditableHeader = ({ field, minW = '90px', onDelete, isDarkMode = true }: {
   );
 };
 
-const EditableMainHeader = ({ field, isDarkMode = true }: { field: string, isDarkMode?: boolean }) => {
+const EditableMainHeader = ({ field }: { field: string }) => {
+  const { isDarkMode } = useTheme();
   const label = useCampaignStore(state => state.columnLabels[field]);
   const updateColumnLabel = useCampaignStore(state => state.updateColumnLabel);
   const [isEditing, setIsEditing] = useState(false);
@@ -128,7 +131,8 @@ const EditableMainHeader = ({ field, isDarkMode = true }: { field: string, isDar
   );
 };
 
-export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean }) {
+export default function GridEngine() {
+  const { isDarkMode } = useTheme();
   const { 
     campaigns, loading, error, initializeProjectData, 
     addCampaign, updateCampaignField, deleteCampaigns, 
@@ -177,20 +181,55 @@ export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean
     }
   };
 
-  const BooleanCell = ({ id, field, value, activeColor }: { id: string, field: string, value: boolean, activeColor: string }) => {
+  const DataCell = ({ id, field, value, activeColor }: { id: string, field: string, value: any, activeColor: string }) => {
     const currentLabel = columnLabels[field] || String(field);
+    const [editing, setEditing] = useState(false);
+    const [localVal, setLocalVal] = useState(String(value ?? ''));
+
+    useEffect(() => { setLocalVal(String(value ?? '')); }, [value]);
+
+    // If the stored value is a real boolean, keep checkbox behavior
+    if (typeof value === 'boolean') {
+      return (
+        <td
+          className={`p-0 border-r cursor-pointer transition-colors group/cell relative ${isDarkMode ? 'border-white/5 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-50'}`}
+          onClick={() => updateCampaignField(id, field, !value)}
+        >
+          <div className="flex items-center justify-center h-full min-h-[44px] w-full">
+            {value ? (
+              <Tag colorClass={activeColor}>{currentLabel}</Tag>
+            ) : (
+              <div className="w-4 h-4 rounded border border-white/10 group-hover/cell:border-white/30 transition-colors"></div>
+            )}
+          </div>
+        </td>
+      );
+    }
+
+    // All other values: render as editable text
     return (
-      <td 
-        className="p-0 border-r border-white/5 cursor-pointer hover:bg-white/5 transition-colors group/cell relative"
-        onClick={() => updateCampaignField(id, field, !value)}
-      >
-        <div className="flex items-center justify-center h-full min-h-[44px] w-full">
-          {value ? (
-            <Tag colorClass={activeColor}>{currentLabel}</Tag>
-          ) : (
-            <div className="w-4 h-4 rounded border border-white/10 group-hover/cell:border-white/30 transition-colors"></div>
-          )}
-        </div>
+      <td className={`p-0 border-r min-w-[120px] relative group/cell ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
+        {editing ? (
+          <input
+            autoFocus
+            value={localVal}
+            onChange={e => setLocalVal(e.target.value)}
+            onBlur={() => { setEditing(false); updateCampaignField(id, field, localVal); }}
+            onKeyDown={e => { if (e.key === 'Enter') { setEditing(false); updateCampaignField(id, field, localVal); } if (e.key === 'Escape') { setEditing(false); setLocalVal(String(value ?? '')); } }}
+            className={`w-full h-full min-h-[44px] absolute inset-0 px-3 text-xs outline-none focus:ring-inset focus:ring-2 focus:ring-brand-500/50 ${isDarkMode ? 'bg-[#1a1a24] text-white' : 'bg-white text-slate-900'}`}
+          />
+        ) : (
+          <div
+            onClick={() => setEditing(true)}
+            className={`min-h-[44px] px-3 flex items-center text-xs cursor-text truncate max-w-[200px] ${
+              localVal
+                ? (isDarkMode ? 'text-slate-200' : 'text-slate-800')
+                : (isDarkMode ? 'text-slate-700' : 'text-slate-400')
+            }`}
+          >
+            {localVal || '—'}
+          </div>
+        )}
       </td>
     );
   };
@@ -206,10 +245,10 @@ export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean
       {/* ADD COLUMN MODAL */}
       {isAddingColumn && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-[#13131a] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="p-6 border-b border-white/5">
-              <h3 className="text-xl font-semibold text-white">Añadir nueva columna</h3>
-              <p className="text-sm text-slate-400 mt-1">Ingresa el nombre para la nueva columna.</p>
+          <div className={`${isDarkMode ? 'bg-[#13131a] border-white/10' : 'bg-white border-slate-200'} border rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden`}>
+            <div className={`p-6 border-b ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
+              <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Añadir nueva columna</h3>
+              <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Ingresa el nombre para la nueva columna.</p>
             </div>
             <div className="p-6">
               <input 
@@ -224,13 +263,17 @@ export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean
                   }
                 }}
                 placeholder="Ej. Social Media, Prioridad..."
-                className="w-full bg-[#0a0a0f] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all"
+                className={`w-full border rounded-xl px-4 py-3 transition-all outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 ${
+                  isDarkMode ? 'bg-[#0a0a0f] border-white/10 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                }`}
               />
             </div>
-            <div className="p-6 bg-white/[0.02] border-t border-white/5 flex items-center justify-end gap-3">
+            <div className={`p-6 flex items-center justify-end gap-3 ${isDarkMode ? 'bg-white/[0.02] border-t border-white/5' : 'bg-slate-50 border-t border-slate-100'}`}>
               <button 
                 onClick={() => { setIsAddingColumn(false); setNewColumnName(''); }}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-white/5 transition-colors"
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  isDarkMode ? 'text-slate-300 hover:text-white hover:bg-white/5' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                }`}
               >
                 Cancelar
               </button>
@@ -333,7 +376,9 @@ export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean
         isDarkMode ? 'bg-[#0a0a0f]/80 border-white/5' : 'bg-white/80 border-slate-200'
       }`}>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 text-sm font-medium text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors border border-white/5">
+          <button className={`flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors border ${
+            isDarkMode ? 'text-white bg-white/5 hover:bg-white/10 border-white/5' : 'text-slate-900 bg-white hover:bg-slate-50 border-slate-200'
+          }`}>
             <LayoutGrid className="w-4 h-4 text-brand-400" />
             Vista Principal
             <ArrowUpDown className="w-3 h-3 text-slate-500 ml-1" />
@@ -432,7 +477,7 @@ export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean
                       selectedIds.includes(row.id) && (isDarkMode ? "bg-brand-500/[0.05]" : "bg-brand-50")
                     )}
                   >
-                    <td className="p-3 text-center border-r border-white/5 relative">
+                    <td className={`p-3 text-center border-r relative ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
                       <span className="text-xs text-slate-600 group-hover:opacity-0 transition-opacity">{index + 1}</span>
                       <input 
                         type="checkbox" 
@@ -444,7 +489,7 @@ export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean
                         onChange={() => toggleSelect(row.id)} 
                       />
                     </td>
-                    <td className="p-0 border-r border-white/5 relative group/input">
+                    <td className={`p-0 border-r relative group/input ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
                       <input 
                         type="text"
                         value={row.title || ''}
@@ -457,7 +502,7 @@ export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean
                         }`}
                       />
                     </td>
-                    <td className="p-0 border-r border-white/5 relative">
+                    <td className={`p-0 border-r relative ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
                       <select 
                         value={row.category || ''}
                         onChange={(e) => updateCampaignField(row.id, 'category', e.target.value || null)}
@@ -480,16 +525,16 @@ export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean
                     </td>
                     
                     {columns.map((colId, i) => (
-                      <BooleanCell 
+                      <DataCell 
                         key={colId} 
                         id={row.id} 
                         field={colId} 
-                        value={!!row[colId]} 
+                        value={row[colId]} 
                         activeColor={COLORS[i % COLORS.length]} 
                       />
                     ))}
                     
-                    <td className="p-0 border-r border-white/5 bg-white/[0.01]"></td>
+                    <td className={`p-0 border-r ${isDarkMode ? 'border-white/5 bg-white/[0.01]' : 'border-slate-200 bg-slate-50/50'}`}></td>
                   </tr>
                 ))}
                 
@@ -501,7 +546,7 @@ export default function GridEngine({ isDarkMode = true }: { isDarkMode?: boolean
                   </tr>
                 ) : (
                   <tr>
-                    <td colSpan={columns.length + 4} className="p-0 border-r border-white/5 bg-brand-500/5 hover:bg-brand-500/10 transition-colors">
+                    <td colSpan={columns.length + 4} className={`p-0 border-r transition-colors ${isDarkMode ? 'border-white/5 bg-brand-500/5 hover:bg-brand-500/10' : 'border-slate-200 bg-brand-50 hover:bg-brand-100'}`}>
                       <button 
                         onClick={addCampaign}
                         className="w-full h-[44px] flex items-center justify-center gap-2 text-sm font-semibold text-brand-400 hover:text-brand-300 transition-colors focus:outline-none"

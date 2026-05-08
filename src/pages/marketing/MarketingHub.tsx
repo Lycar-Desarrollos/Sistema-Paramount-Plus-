@@ -13,10 +13,12 @@ import ContentPipeline from './ContentPipeline';
 import BudgetTracker from './BudgetTracker';
 import LeadPipeline from './LeadPipeline';
 import CampaignHub from './CampaignHub';
+import { useTheme } from '../../context/ThemeContext';
 
 type MarketingTab = 'overview' | 'content' | 'budget' | 'leads' | 'hub';
 
-export default function MarketingHub({ isDarkMode = true }: { isDarkMode?: boolean }) {
+export default function MarketingHub() {
+  const { isDarkMode } = useTheme();
   const [activeSubTab, setActiveSubTab] = useState<MarketingTab>('overview');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
 

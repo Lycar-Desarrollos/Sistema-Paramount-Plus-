@@ -19,14 +19,17 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
+import { useTheme } from '../context/ThemeContext';
 
 interface UserMenuProps {
   user: any;
   userData: any;
-  isDarkMode: boolean;
+  onManageTeam?: () => void;
+  onManageAccount?: () => void;
 }
 
-export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, isDarkMode }) => {
+export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, onManageTeam, onManageAccount }) => {
+  const { isDarkMode } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -45,20 +48,13 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, isDarkMode }
   };
 
   const menuItems = [
-    { icon: User, label: 'Cuenta', section: 'personal' },
-    { icon: Users, label: 'Gestionar grupos', badge: 'Business', section: 'personal' },
-    { icon: Bell, label: 'Preferencias de notificación', hasArrow: true, section: 'personal' },
-    { icon: Languages, label: 'Preferencias de idioma', hasArrow: true, section: 'personal' },
+    { icon: User, label: 'Cuenta', section: 'personal', onClick: onManageAccount },
+    ...(userData?.role === 'admin' ? [{ icon: Users, label: 'Gestionar equipo', badge: 'Business', section: 'personal', onClick: onManageTeam }] : []),
     { icon: Palette, label: 'Aspecto', badge: 'Beta', section: 'personal' },
     
     { icon: MessageCircle, label: 'Comunicarse con Ventas', section: 'action' },
-    { icon: TrendingUp, label: 'Mejorar', section: 'action' },
     { icon: Share2, label: 'Cuéntale a un amigo', section: 'action' },
     
-    { icon: LinkIcon, label: 'Integraciones', section: 'system' },
-    { icon: ShieldCheck, label: 'Centro de creadores', section: 'system' },
-    
-    { icon: Trash2, label: 'Papelera de reciclaje', section: 'footer' },
     { icon: LogOut, label: 'Cerrar sesión', onClick: handleLogout, section: 'footer', color: 'text-red-400' },
   ];
 
@@ -69,15 +65,13 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, isDarkMode }
         className="flex items-center gap-2 group transition-all"
       >
         <div className="flex items-center gap-2 pl-2 border-l border-white/10">
-          <div className="text-right hidden sm:block">
-            <p className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-              {user.displayName || 'Edgar Ydalimir'}
-            </p>
-            <p className="text-[10px] text-slate-400 max-w-[120px] truncate">{user.email}</p>
-          </div>
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-pink-500 text-white flex items-center justify-center text-sm font-bold border-2 border-white/10 shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform cursor-pointer">
-            {user.email?.charAt(0).toUpperCase() || 'U'}
-          </div>
+          {userData?.photoURL ? (
+            <img src={userData.photoURL} alt={user.displayName || 'User'} className="w-9 h-9 rounded-full object-cover border-2 border-white/10 shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform cursor-pointer" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-pink-500 text-white flex items-center justify-center text-sm font-bold border-2 border-white/10 shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform cursor-pointer">
+              {(userData?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U').toUpperCase()}
+            </div>
+          )}
         </div>
       </button>
 
@@ -96,12 +90,16 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, isDarkMode }
             {/* Header / Profile Info */}
             <div className={`p-5 border-b ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-500 to-pink-500 flex items-center justify-center text-xl font-bold text-white shadow-inner">
-                  {user.email?.charAt(0).toUpperCase() || 'U'}
-                </div>
+                {userData?.photoURL ? (
+                  <img src={userData.photoURL} alt={user.displayName || 'User'} className="w-12 h-12 rounded-full object-cover shadow-inner ring-2 ring-white/10" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-500 to-pink-500 flex items-center justify-center text-xl font-bold text-white shadow-inner">
+                    {(userData?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U').toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                    {user.displayName || 'Edgar Ydalimir'}
+                    {userData?.displayName || user.displayName || 'Edgar Ydalimir'}
                   </p>
                   <p className="text-xs text-slate-400 truncate">{user.email}</p>
                 </div>
@@ -110,7 +108,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, isDarkMode }
 
             {/* Menu Sections */}
             <div className="max-h-[70vh] overflow-y-auto custom-scrollbar p-2 space-y-1">
-              {['personal', 'action', 'system', 'footer'].map((section, idx, arr) => (
+              {['personal', 'action', 'footer'].map((section, idx, arr) => (
                 <div key={section}>
                   {menuItems.filter(item => item.section === section).map((item, i) => (
                     <button

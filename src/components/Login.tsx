@@ -3,7 +3,10 @@ import { Sparkles, ShieldAlert, CheckCircle2, Layout, Database, Zap as ZapIcon, 
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 
+import { useTheme } from '../context/ThemeContext';
+
 export default function Login() {
+  const { isDarkMode, toggleDarkMode } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -11,7 +14,6 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isResetMode, setIsResetMode] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +58,7 @@ export default function Login() {
             </div>
             
             <button 
-              onClick={() => setIsDarkMode(!isDarkMode)}
+              onClick={toggleDarkMode}
               className={`p-2 rounded-full transition-colors ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10' : 'bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`}
               title={isDarkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
             >

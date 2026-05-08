@@ -57,7 +57,7 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item, isDarkMode = tru
       )}
 
       {/* Footer Info */}
-      <div className="flex items-center justify-between pt-3 border-t border-white/5">
+      <div className={`flex items-center justify-between pt-3 border-t ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
         <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
           <div className="flex items-center gap-1">
             <Clock className="w-3 h-3" />
@@ -72,7 +72,7 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item, isDarkMode = tru
         </div>
         
         <div className="flex -space-x-1.5">
-           <div className="w-6 h-6 rounded-full bg-brand-500 border-2 border-[#1a1a24] flex items-center justify-center text-[10px] font-bold text-white">
+           <div className={`w-6 h-6 rounded-full bg-brand-500 border-2 flex items-center justify-center text-[10px] font-bold text-white ${isDarkMode ? 'border-[#1a1a24]' : 'border-white'}`}>
               {item.copywriter?.charAt(0) || 'U'}
            </div>
         </div>

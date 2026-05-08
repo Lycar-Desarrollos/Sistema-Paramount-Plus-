@@ -25,10 +25,10 @@ export default function MarketingDashboard({ isDarkMode = true }: { isDarkMode?:
   if (loading) {
     return (
       <div className="p-8 space-y-8 animate-pulse">
-        <div className="h-10 w-64 bg-slate-800 rounded-lg"></div>
+        <div className={`h-10 w-64 rounded-lg ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1,2,3,4].map(i => (
-            <div key={i} className="h-32 bg-slate-800/50 rounded-[24px]"></div>
+            <div key={i} className={`h-32 rounded-[24px] ${isDarkMode ? 'bg-slate-800/50' : 'bg-slate-200/50'}`}></div>
           ))}
         </div>
       </div>
@@ -49,6 +49,16 @@ export default function MarketingDashboard({ isDarkMode = true }: { isDarkMode?:
         </div>
         
         <div className="flex items-center gap-3">
+          <div className="relative">
+             <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
+             <input 
+                type="text" 
+                placeholder="Filtrar contenido..." 
+                className={`border rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none focus:border-brand-500 transition-all ${
+                   isDarkMode ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-600' : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`} 
+             />
+          </div>
           <button className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
             isDarkMode ? 'bg-white/5 text-white hover:bg-white/10 border border-white/10' : 'bg-white text-slate-900 border border-slate-200'
           }`}>
@@ -112,23 +122,23 @@ export default function MarketingDashboard({ isDarkMode = true }: { isDarkMode?:
       {/* Charts & Activity Placeholder */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className={`lg:col-span-2 p-8 rounded-[32px] border ${
-          isDarkMode ? 'bg-[#13131a]/50 border-white/5' : 'bg-white border-slate-200'
+          isDarkMode ? 'bg-slate-900/50 border-white/5' : 'bg-white border-slate-200'
         }`}>
           <div className="flex justify-between items-center mb-8">
             <h3 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Rendimiento de Inversión</h3>
-            <div className="flex bg-white/5 p-1 rounded-lg">
+            <div className={`p-1 rounded-lg flex ${isDarkMode ? 'bg-black/20' : 'bg-slate-100'}`}>
                <button className="px-3 py-1 text-xs font-bold bg-brand-500 text-white rounded-md">Mes</button>
-               <button className="px-3 py-1 text-xs font-bold text-slate-500">Año</button>
+               <button className={`px-3 py-1 text-xs font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Año</button>
             </div>
           </div>
-          <div className="h-[300px] flex items-center justify-center border-2 border-dashed border-white/5 rounded-2xl">
-             <BarChart3 className="w-12 h-12 text-slate-800" />
-             <p className="text-slate-600 font-medium ml-4">Motor de Gráficos Recharts en construcción...</p>
+          <div className={`h-[300px] flex items-center justify-center border-2 border-dashed rounded-2xl ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
+             <BarChart3 className={`w-12 h-12 ${isDarkMode ? 'text-slate-800' : 'text-slate-300'}`} />
+             <p className={`${isDarkMode ? 'text-slate-500' : 'text-slate-400'} font-medium ml-4`}>Motor de Gráficos Recharts en construcción...</p>
           </div>
         </div>
 
         <div className={`p-8 rounded-[32px] border ${
-          isDarkMode ? 'bg-[#13131a]/50 border-white/5' : 'bg-white border-slate-200'
+          isDarkMode ? 'bg-slate-900/50 border-white/5' : 'bg-white border-slate-200'
         }`}>
           <h3 className={`text-xl font-bold mb-6 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Actividad Reciente</h3>
           <div className="space-y-6">

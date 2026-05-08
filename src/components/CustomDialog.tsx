@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, AlertCircle, Check, Info } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 interface Props {
   isOpen: boolean;
@@ -11,7 +12,6 @@ interface Props {
   defaultValue?: string;
   confirmText?: string;
   cancelText?: string;
-  isDarkMode?: boolean;
 }
 
 export default function CustomDialog({
@@ -23,9 +23,9 @@ export default function CustomDialog({
   type = 'confirm',
   defaultValue = '',
   confirmText = 'Confirmar',
-  cancelText = 'Cancelar',
-  isDarkMode = true
+  cancelText = 'Cancelar'
 }: Props) {
+  const { isDarkMode } = useTheme();
   const [inputValue, setInputValue] = useState(defaultValue);
 
   useEffect(() => {

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
-import { MoreHorizontal, Plus, MessageSquare, Paperclip, GripVertical, AlertCircle, ChevronRight, User } from 'lucide-react';
+import { MoreHorizontal, Plus, MessageSquare, Paperclip, GripVertical, AlertCircle, ChevronRight, User, Layout } from 'lucide-react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useCampaignStore } from '../store/useCampaignStore';
+import { useTheme } from '../context/ThemeContext';
 
 // Mock Avatars para darle el toque premium colaborativo
 const AVATARS = [
@@ -29,10 +30,10 @@ const INITIAL_DATA = {
 };
 
 interface KanbanBoardProps {
-  isDarkMode?: boolean;
 }
 
-export default function KanbanBoard({ isDarkMode = true }: KanbanBoardProps) {
+export default function KanbanBoard({}: KanbanBoardProps) {
+  const { isDarkMode } = useTheme();
   const [data, setData] = useState(INITIAL_DATA);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -143,12 +144,22 @@ export default function KanbanBoard({ isDarkMode = true }: KanbanBoardProps) {
   };
 
   const getTagColor = (tag: string) => {
-    switch (tag) {
-      case 'Social Media': return 'bg-pink-500/10 text-pink-400 border-pink-500/20';
-      case 'Branding': return 'bg-brand-500/10 text-brand-400 border-brand-500/20';
-      case 'Video': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-      case 'Marketing': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+    if (isDarkMode) {
+      switch (tag) {
+        case 'Social Media': return 'bg-pink-500/10 text-pink-400 border-pink-500/20';
+        case 'Branding': return 'bg-brand-500/10 text-brand-400 border-brand-500/20';
+        case 'Video': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+        case 'Marketing': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+        default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+      }
+    } else {
+      switch (tag) {
+        case 'Social Media': return 'bg-pink-50 text-pink-600 border-pink-100';
+        case 'Branding': return 'bg-brand-50 text-brand-600 border-brand-100';
+        case 'Video': return 'bg-amber-50 text-amber-600 border-amber-100';
+        case 'Marketing': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+        default: return 'bg-slate-50 text-slate-600 border-slate-100';
+      }
     }
   };
 
@@ -230,7 +241,7 @@ export default function KanbanBoard({ isDarkMode = true }: KanbanBoardProps) {
                   }`}
                 >
                   {/* Cabecera de Columna */}
-                  <div className="p-4 flex items-center justify-between border-b border-white/5 relative overflow-hidden rounded-t-2xl">
+                  <div className={`p-4 flex items-center justify-between border-b relative overflow-hidden rounded-t-2xl ${isDarkMode ? 'border-white/5' : 'border-slate-200 bg-white/50'}`}>
                     <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${column.color}`}></div>
                     <div className="flex items-center gap-3">
                       <h3 className={`font-bold text-[15px] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{column.title}</h3>
@@ -272,7 +283,7 @@ export default function KanbanBoard({ isDarkMode = true }: KanbanBoardProps) {
                                   }`}
                                 >
                                   {/* Icono de Arrastrar oculto hasta el hover */}
-                                  <div className="absolute -left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-white/10 rounded backdrop-blur-md shadow-sm">
+                                  <div className={`absolute -left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded backdrop-blur-md shadow-sm ${isDarkMode ? 'bg-white/10' : 'bg-white border border-slate-200'}`}>
                                     <GripVertical className="w-3 h-3 text-slate-400" />
                                   </div>
 
@@ -294,7 +305,7 @@ export default function KanbanBoard({ isDarkMode = true }: KanbanBoardProps) {
                                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border ${getTagColor(task.tag)}`}>
                                       {task.tag}
                                     </span>
-                                    <div className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md border border-white/5" title={`Prioridad: ${task.priority}`}>
+                                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'}`} title={`Prioridad: ${task.priority}`}>
                                       {getPriorityIcon(task.priority || 'Medium')}
                                     </div>
                                   </div>
@@ -305,7 +316,7 @@ export default function KanbanBoard({ isDarkMode = true }: KanbanBoardProps) {
                                   </p>
 
                                   {/* Footer: Comentarios, Archivos y Avatares */}
-                                  <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                                  <div className={`flex items-center justify-between pt-3 border-t ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
                                     <div className="flex items-center gap-3 text-slate-400 text-xs font-medium">
                                       <div className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer">
                                         <MessageSquare className="w-3.5 h-3.5" />
@@ -331,7 +342,7 @@ export default function KanbanBoard({ isDarkMode = true }: KanbanBoardProps) {
                                           ))}
                                         </div>
                                       ) : (
-                                        <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-500">
+                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-white/5 border border-white/10 text-slate-500' : 'bg-slate-100 border border-slate-200 text-slate-400'}`}>
                                           <User className="w-3 h-3" />
                                         </div>
                                       )}
@@ -368,7 +379,7 @@ export default function KanbanBoard({ isDarkMode = true }: KanbanBoardProps) {
               isDarkMode ? 'border-white/10 hover:border-white/20 hover:bg-white/[0.02]' : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'
             }`}>
               <div className="flex flex-col items-center gap-2 text-slate-500 group-hover:text-brand-400 transition-colors">
-                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-brand-500/10">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center group-hover:bg-brand-500/10 ${isDarkMode ? 'bg-white/5' : 'bg-slate-100'}`}>
                   <Plus className="w-5 h-5" />
                 </div>
                 <span className="text-sm font-medium">Nueva Lista</span>

@@ -4,21 +4,8 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-
-    function isWorkspaceMember(workspaceId) {
-      let ws = get(/databases/$(database)/documents/workspaces/$(workspaceId));
-      return isAuthenticated() && (
-        ws.data.members == null || 
-        ws.data.members[request.auth.uid] != null
-      );
-    }
-
-    function getWorkspaceRole(workspaceId) {
-      return get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.members[request.auth.uid];
-    }
-
     match /users/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      allow read, write: if isAuthenticated();
     }
     
     match /workspaces/{workspaceId} {

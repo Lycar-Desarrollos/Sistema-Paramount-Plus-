@@ -1,14 +1,15 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Layout, Sparkles } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 interface DashboardProps {
   title?: string;
   icon?: React.ElementType;
-  isDarkMode?: boolean;
 }
 
-export default function Dashboard({ title = "Interfaces", icon: Icon = Layout, isDarkMode = true }: DashboardProps) {
+export default function Dashboard({ title = "Interfaces", icon: Icon = Layout }: DashboardProps) {
+  const { isDarkMode } = useTheme();
   return (
     <div className="h-full flex items-center justify-center min-h-[calc(100vh-14rem)]">
       <motion.div 

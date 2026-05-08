@@ -3,10 +3,11 @@ import { X, Layout, Database, Zap as ZapIcon, Briefcase, Code, Megaphone, Users,
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
+import { useTheme } from '../context/ThemeContext';
+
 interface Props {
   onClose: () => void;
   onCreate: (name: string, template?: { columns: string[], labels: Record<string, string> }, rows?: any[]) => Promise<void>;
-  isDarkMode?: boolean;
 }
 
 interface TemplateItem {
@@ -72,7 +73,8 @@ const TEMPLATES: TemplateItem[] = [
   }
 ];
 
-export default function CreateProjectModal({ onClose, onCreate, isDarkMode = false }: Props) {
+export default function CreateProjectModal({ onClose, onCreate }: Props) {
+  const { isDarkMode } = useTheme();
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('blank');
@@ -135,17 +137,17 @@ export default function CreateProjectModal({ onClose, onCreate, isDarkMode = fal
     
     // Detect columns from the first object
     const keys = Object.keys(data[0]);
-    const columns = keys.map(k => k.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''));
+    const columns = keys.map(k => k.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').substring(0, 40) || `col_${Date.now()}`);
     const labels: Record<string, string> = {};
     keys.forEach((k, i) => {
-      labels[columns[i]] = k;
+      labels[columns[i]] = k; // original Excel header as display label
     });
 
-    // Map rows to the new column names
+    // Map rows using sanitized keys
     const rows = data.map(item => {
       const newItem: any = {};
       keys.forEach((k, i) => {
-        newItem[columns[i]] = item[k];
+        newItem[columns[i]] = item[k] !== undefined && item[k] !== null ? String(item[k]) : '';
       });
       return newItem;
     });
