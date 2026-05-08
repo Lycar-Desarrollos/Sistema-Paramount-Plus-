@@ -8,7 +8,8 @@ import {
   Plus, 
   Calendar,
   ArrowUpRight,
-  Zap
+  Zap,
+  Search
 } from 'lucide-react';
 import { KPICard } from '../../components/marketing/KPICard';
 import { useCampaigns } from '../../hooks/marketing/useCampaigns';

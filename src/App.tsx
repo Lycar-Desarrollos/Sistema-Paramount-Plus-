@@ -256,7 +256,6 @@ export default function App() {
               }
               setShowHome(false);
             }} 
-            isDarkMode={isDarkMode}
           />
         )}
         {projectToDelete && (
@@ -336,7 +335,6 @@ export default function App() {
             }
             setShowHome(false);
           }} 
-          isDarkMode={isDarkMode}
         />
       )}
 
@@ -752,7 +750,6 @@ export default function App() {
               await addTable(activeProjectId, name, template, rows);
               setShowHome(false);
             }}
-            isDarkMode={isDarkMode}
           />
         )}
 
@@ -765,11 +762,9 @@ export default function App() {
           type={dialogConfig.type}
           defaultValue={dialogConfig.defaultValue}
           confirmText={dialogConfig.confirmText}
-          isDarkMode={isDarkMode}
         />
         {isProMode && !isAiSimulating && (
           <AIChat 
-            isDarkMode={isDarkMode} 
             onClose={() => setIsProMode(false)} 
             userData={userData} 
           />

@@ -227,7 +227,7 @@ export default function HomePage({
               </div>
 
               <div className="h-6 w-px bg-white/10 mx-1"></div>
-              <UserMenu user={user} userData={userData} isDarkMode={isDarkMode} onManageTeam={onManageTeam} />
+              <UserMenu user={user} userData={userData} onManageTeam={onManageTeam} />
             </div>
           </header>
 

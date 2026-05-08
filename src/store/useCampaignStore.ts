@@ -6,6 +6,9 @@ export interface Project {
   id: string;
   name: string;
   createdAt: number;
+  favoriteBy?: string[];
+  memberEmails?: string[];
+  members?: Record<string, string>;
 }
 
 export interface Table {
@@ -62,7 +65,7 @@ interface CampaignStore {
   initializeProjectData: (projectId: string) => () => void; 
   initializeTableData: (tableId: string) => () => void;
   addProject: (name: string, template?: { columns: string[], labels: Record<string, string> }) => Promise<void>;
-  addTable: (projectId: string, name: string, template?: { columns: string[], labels: Record<string, string> }) => Promise<void>;
+  addTable: (projectId: string, name: string, template?: { columns: string[], labels: Record<string, string> }, initialRows?: any[]) => Promise<void>;
   updateTable: (id: string, name: string) => Promise<void>;
   deleteTable: (id: string) => Promise<void>;
   addCampaign: () => Promise<void>;
@@ -466,7 +469,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       if (!proj) return;
       const currentEmails = proj.memberEmails || [];
       await updateDoc(doc(db, 'workspaces', projectId), {
-        memberEmails: currentEmails.filter(e => e !== email.toLowerCase())
+        memberEmails: currentEmails.filter((e: string) => e !== email.toLowerCase())
       });
     } catch (error: any) {
       console.error(error);
@@ -482,7 +485,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       const isFav = favs.includes(emailLower);
       
       await updateDoc(doc(db, 'workspaces', projectId), {
-        favoriteBy: isFav ? favs.filter(e => e !== emailLower) : [...favs, emailLower]
+        favoriteBy: isFav ? favs.filter((e: string) => e !== emailLower) : [...favs, emailLower]
       });
     } catch (error: any) {
       console.error("Error toggling favorite:", error);

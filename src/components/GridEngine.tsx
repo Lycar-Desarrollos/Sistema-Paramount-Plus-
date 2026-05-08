@@ -453,10 +453,10 @@ export default function GridEngine() {
                       className="rounded bg-black/20 border-white/20 text-brand-500 focus:ring-brand-500/50 cursor-pointer accent-brand-500" 
                     />
                   </th>
-                  <EditableMainHeader field="title" isDarkMode={isDarkMode} />
-                  <EditableHeader field="category" minW="140px" isDarkMode={isDarkMode} />
+                  <EditableMainHeader field="title" />
+                  <EditableHeader field="category" minW="140px" />
                   {columns.map((colId) => (
-                    <EditableHeader key={colId} field={colId} onDelete={setColumnToDelete} isDarkMode={isDarkMode} />
+                    <EditableHeader key={colId} field={colId} onDelete={setColumnToDelete} />
                   ))}
                   <th className={`p-0 border-r min-w-[50px] transition-colors cursor-pointer ${
                     isDarkMode ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-100'

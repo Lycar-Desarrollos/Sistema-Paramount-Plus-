@@ -48,14 +48,14 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, onManageTeam
   };
 
   const menuItems = [
-    { icon: User, label: 'Cuenta', section: 'personal', onClick: onManageAccount },
-    ...(userData?.role === 'admin' ? [{ icon: Users, label: 'Gestionar equipo', badge: 'Business', section: 'personal', onClick: onManageTeam }] : []),
-    { icon: Palette, label: 'Aspecto', badge: 'Beta', section: 'personal' },
+    { icon: User, label: 'Cuenta', section: 'personal', onClick: onManageAccount, hasArrow: true },
+    ...(userData?.role === 'admin' ? [{ icon: Users, label: 'Gestionar equipo', badge: 'Business', section: 'personal', onClick: onManageTeam, hasArrow: true }] : []),
+    { icon: Palette, label: 'Aspecto', badge: 'Beta', section: 'personal', hasArrow: true },
     
-    { icon: MessageCircle, label: 'Comunicarse con Ventas', section: 'action' },
-    { icon: Share2, label: 'Cuéntale a un amigo', section: 'action' },
+    { icon: MessageCircle, label: 'Comunicarse con Ventas', section: 'action', hasArrow: true },
+    { icon: Share2, label: 'Cuéntale a un amigo', section: 'action', hasArrow: true },
     
-    { icon: LogOut, label: 'Cerrar sesión', onClick: handleLogout, section: 'footer', color: 'text-red-400' },
+    { icon: LogOut, label: 'Cerrar sesión', onClick: handleLogout, section: 'footer', color: 'text-red-400', hasArrow: false },
   ];
 
   return (
