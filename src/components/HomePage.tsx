@@ -428,7 +428,7 @@ export default function HomePage({
     <div className={`flex h-screen ${isDarkMode ? 'bg-[#0f0f13] text-white' : 'bg-slate-50 text-slate-900'} font-sans overflow-hidden`}>
       {Sidebar}
 
-      <main className="flex-1 relative flex flex-col overflow-hidden">
+      <div className="flex-1 relative flex flex-col overflow-hidden">
         {/* Top bar */}
         <header className={`h-14 flex items-center justify-between px-6 border-b flex-shrink-0 ${isDarkMode ? 'border-white/5' : 'border-slate-200 bg-white'}`}>
           <h1 className="text-sm font-semibold">
