@@ -2,15 +2,16 @@ import React, { useState, useRef } from 'react';
 import { X, Camera, Save, Loader2, User } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useTheme } from '../context/ThemeContext';
 
 interface Props {
   user: any;
   userData: any;
-  isDarkMode: boolean;
   onClose: () => void;
 }
 
-export default function ProfileModal({ user, userData, isDarkMode, onClose }: Props) {
+export default function ProfileModal({ user, userData, onClose }: Props) {
+  const { isDarkMode } = useTheme();
   const [displayName, setDisplayName] = useState(userData?.displayName || user?.displayName || '');
   const [description, setDescription] = useState(userData?.description || '');
   const [loading, setLoading] = useState(false);

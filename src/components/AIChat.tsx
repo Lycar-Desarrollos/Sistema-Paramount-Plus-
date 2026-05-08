@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send, X, Bot, User, Maximize2, Minimize2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTheme } from '../context/ThemeContext';
 
 interface Message {
   id: string;
@@ -10,12 +11,12 @@ interface Message {
 }
 
 interface AIChatProps {
-  isDarkMode: boolean;
   onClose: () => void;
   userData?: any;
 }
 
-export default function AIChat({ isDarkMode, onClose, userData }: AIChatProps) {
+export default function AIChat({ onClose, userData }: AIChatProps) {
+  const { isDarkMode } = useTheme();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',

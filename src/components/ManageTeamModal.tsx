@@ -6,7 +6,6 @@ import type { UserRole } from '../context/AuthContext';
 
 interface ManageTeamModalProps {
   onClose: () => void;
-  isDarkMode: boolean;
   currentUserEmail?: string;
 }
 
@@ -16,7 +15,10 @@ interface TeamMember {
   role: UserRole;
 }
 
-export default function ManageTeamModal({ onClose, isDarkMode, currentUserEmail }: ManageTeamModalProps) {
+import { useTheme } from '../context/ThemeContext';
+
+export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTeamModalProps) {
+  const { isDarkMode } = useTheme();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
