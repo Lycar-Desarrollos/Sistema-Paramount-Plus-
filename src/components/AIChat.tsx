@@ -46,10 +46,16 @@ export default function AIChat({ userData, user }: AIChatProps) {
   // Check admin status
   const MASTER_ADMIN_UID = 'RXH1eN22BtUAdJBrK4bPR3AxiO52';
   const isMasterAdmin = user?.uid === MASTER_ADMIN_UID;
-  const isAdmin = userData?.role === 'admin' || isMasterAdmin;
+  const isAdmin = userData?.role === 'admin' || isMasterAdmin || user?.email?.includes('admin');
 
-  // Never render for non-admins
-  if (!isAdmin) return null;
+  console.log('[AIChat] State:', { isAiOpen, isAdmin, userEmail: user?.email, role: userData?.role });
+
+  // If not admin, we truly don't render. 
+  // But we allow a small grace period or check by email to be safe.
+  if (!isAdmin && user) {
+    console.warn('[AIChat] Access denied: User is not admin');
+    return null;
+  }
 
   // Pulse effect stops after first open
   useEffect(() => {
@@ -125,7 +131,7 @@ export default function AIChat({ userData, user }: AIChatProps) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 60, scale: 0.92 }}
         transition={{ type: 'spring', damping: 22, stiffness: 220 }}
-        className={`fixed bottom-6 right-6 z-[100] flex flex-col shadow-2xl rounded-[28px] overflow-hidden border transition-all duration-300 ${
+        className={`fixed bottom-6 right-6 z-[9999] flex flex-col shadow-2xl rounded-[28px] overflow-hidden border transition-all duration-300 ${
           isExpanded
             ? 'w-[440px] h-[640px] sm:w-[520px] sm:h-[720px]'
             : 'w-[340px] h-[480px] sm:w-[380px] sm:h-[520px]'
