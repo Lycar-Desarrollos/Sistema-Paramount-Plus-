@@ -39,6 +39,7 @@ export interface ColumnDefinition {
     options?: { label: string; color: string }[];
     targetTableId?: string; // Para Linked Records
   };
+  required?: boolean;
 }
 
 export type TableType = 'general' | 'requests';
@@ -51,6 +52,7 @@ export interface Table {
   columnDefinitions: ColumnDefinition[];
   createdAt: number;
   favoriteBy?: string[];
+  isInitial?: boolean;
 }
 
 export interface RecordData {
@@ -65,6 +67,8 @@ export interface RecordData {
 export const DEFAULT_CATEGORIES = ['Priority (L)', 'Moderate (M)', 'Tentpole (XL)', 'Social Media', 'Branding'];
 
 export const MARKETING_REQUEST_COLUMNS: ColumnDefinition[] = [
+  { id: 'folio', name: 'Folio', type: 'text' },
+  { id: 'email', name: 'Correo Electrónico', type: 'email', required: true },
   { id: 'title', name: 'Title', type: 'text' },
   { id: 'status', name: 'Status', type: 'select', config: { 
     options: [
@@ -106,6 +110,8 @@ export const DEFAULT_COLUMNS_V2: ColumnDefinition[] = [
 ];
 
 export const DEFAULT_FORM_COLUMNS: ColumnDefinition[] = [
+  { id: 'folio', name: 'Folio', type: 'text' },
+  { id: 'email', name: 'Correo Electrónico', type: 'email', required: true },
   { id: 'title', name: 'Título de la solicitud', type: 'text' },
   { id: 'type', name: 'Tipo de Pieza', type: 'select', config: {
     options: [
@@ -457,7 +463,8 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
         name: template === 'marketing' ? 'Solicitudes de Marketing' : 'Datos Principales',
         type,
         columnDefinitions: cols,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        isInitial: true
       });
 
       // Añadir 10 filas por defecto
@@ -574,6 +581,12 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       }
 
       console.log("Adding record to table:", idToUse, sanitizedValues);
+      
+      // Auto-folio if column exists and is empty
+      const table = get().tables.find(t => t.id === idToUse);
+      if (table?.columnDefinitions.some(c => c.id === 'folio') && !sanitizedValues['folio']) {
+        sanitizedValues['folio'] = `NT-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
+      }
       
       const docRef = await addDoc(collection(db, 'campaigns'), {
         tableId: idToUse,

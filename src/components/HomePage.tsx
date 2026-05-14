@@ -320,7 +320,7 @@ export default function HomePage({
             
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
-                {userData?.role === 'admin' && (
+                {(userData?.role === 'admin' || user?.uid === 'RXH1eN22BtUAdJBrK4bPR3AxiO52') && (
                   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                       Notificaciones
@@ -355,10 +355,16 @@ export default function HomePage({
           <div className={`h-14 flex items-center justify-between px-6 border-b flex-shrink-0 z-20 transition-all ${isDarkMode ? 'bg-[#0f0f13] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
             <div className="flex items-center gap-4">
               <div className={`flex items-center p-1 border rounded-xl overflow-hidden ${isDarkMode ? 'bg-white/[0.03] border-white/10' : 'bg-slate-100/80 border-slate-200'}`}>
-                <button className={`p-1.5 rounded-lg transition-all ${isDarkMode ? 'bg-white/10 text-white shadow-lg' : 'bg-white text-brand-600 shadow-sm'}`}>
+                <button 
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? (isDarkMode ? 'bg-white/10 text-white shadow-lg' : 'bg-white text-brand-600 shadow-sm') : 'text-slate-500 hover:text-slate-300'}`}
+                >
                   <List className="w-3.5 h-3.5" />
                 </button>
-                <button className={`p-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition-all`}>
+                <button 
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? (isDarkMode ? 'bg-white/10 text-white shadow-lg' : 'bg-white text-brand-600 shadow-sm') : 'text-slate-500 hover:text-slate-300'}`}
+                >
                   <Grid3X3 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -369,18 +375,7 @@ export default function HomePage({
 
             <div className="flex items-center gap-2">
 
-              {userData?.role === 'admin' && (
-                <button
-                  onClick={() => setSettingsProject(selectedProject)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                    isDarkMode ? 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200'
-                  }`}
-                  title="Configurar proyecto"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                  Ajustes
-                </button>
-              )}
+
 
               <button 
                 onClick={() => onCreateTable(selectedProject.id)}
@@ -396,80 +391,138 @@ export default function HomePage({
           <div className="flex-1 flex overflow-hidden relative">
             <main className="flex-1 overflow-y-auto p-6 bg-transparent">
               <div className="max-w-4xl mx-auto">
-                <div className="space-y-1.5">
-                  {projectTables.map(table => (
-                    <div
-                      key={table.id}
-                      onClick={() => handleTableClick(selectedProject.id, table.id)}
-                      onMouseEnter={() => setHoveredId(table.id)}
-                      onMouseLeave={() => setHoveredId(null)}
-                      className={`group flex items-center gap-4 p-4 card-standard ${
-                        isDarkMode ? 'card-dark' : 'card-light'
-                      } cursor-pointer select-none`}
-                    >
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-extrabold text-white flex-shrink-0 shadow-lg ${hashColor(table.id, TABLE_COLORS)}`}>
-                        {initials(table.name)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className={`text-sm font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{table.name}</h3>
-                        <p className={`text-xs mt-1 flex items-center gap-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                          <Database className="w-3.5 h-3.5" />
-                          Abrir datos · {timeAgo(table.createdAt)}
-                        </p>
-                      </div>
-                      <div className={`flex items-center gap-1.5 transition-opacity ${hoveredId === table.id || table.favoriteBy?.includes(user?.email?.toLowerCase() || '') || openMenuTableId === table.id ? 'opacity-100' : 'opacity-0'}`}>
-                        <button 
-                          onClick={e => { e.stopPropagation(); useCampaignStore.getState().toggleTableFavorite(table.id); }} 
-                          className={`p-2 rounded-xl transition-colors ${table.favoriteBy?.includes(user?.email?.toLowerCase() || '') ? 'text-amber-400 bg-amber-400/10' : (isDarkMode ? 'hover:bg-white/10 text-slate-500 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900')}`}
-                        >
-                          <Star className="w-4 h-4" fill={table.favoriteBy?.includes(user?.email?.toLowerCase() || '') ? 'currentColor' : 'none'} />
-                        </button>
-                        
-                        <div className="relative">
+                {viewMode === 'list' ? (
+                  <div className="space-y-1.5">
+                    {projectTables.map(table => (
+                      <div
+                        key={table.id}
+                        onClick={() => handleTableClick(selectedProject.id, table.id)}
+                        onMouseEnter={() => setHoveredId(table.id)}
+                        onMouseLeave={() => setHoveredId(null)}
+                        className={`group flex items-center gap-4 p-4 card-standard ${
+                          isDarkMode ? 'card-dark' : 'card-light'
+                        } cursor-pointer select-none`}
+                      >
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-extrabold text-white flex-shrink-0 shadow-lg ${hashColor(table.id, TABLE_COLORS)}`}>
+                          {initials(table.name)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className={`text-sm font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{table.name}</h3>
+                          <p className={`text-xs mt-1 flex items-center gap-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            <Database className="w-3.5 h-3.5" />
+                            Abrir datos · {timeAgo(table.createdAt)}
+                          </p>
+                        </div>
+                        <div className={`flex items-center gap-1.5 transition-opacity ${hoveredId === table.id || table.favoriteBy?.includes(user?.email?.toLowerCase() || '') || openMenuTableId === table.id ? 'opacity-100' : 'opacity-0'}`}>
                           <button 
-                            onClick={e => { 
-                              e.stopPropagation(); 
-                              setOpenMenuTableId(openMenuTableId === table.id ? null : table.id); 
-                            }} 
-                            className={`p-2 rounded-xl transition-all ${
-                              openMenuTableId === table.id
-                                ? (isDarkMode ? 'bg-white/10 text-white shadow-lg' : 'bg-slate-100 text-slate-900 shadow-sm')
-                                : (isDarkMode ? 'hover:bg-white/10 text-slate-500 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900')
-                            }`}
+                            onClick={e => { e.stopPropagation(); useCampaignStore.getState().toggleTableFavorite(table.id); }} 
+                            className={`p-2 rounded-xl transition-colors ${table.favoriteBy?.includes(user?.email?.toLowerCase() || '') ? 'text-amber-400 bg-amber-400/10' : (isDarkMode ? 'hover:bg-white/10 text-slate-500 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900')}`}
                           >
-                            <MoreHorizontal className="w-4 h-4" />
+                            <Star className="w-4 h-4" fill={table.favoriteBy?.includes(user?.email?.toLowerCase() || '') ? 'currentColor' : 'none'} />
                           </button>
+                          
+                          <div className="relative">
+                            <button 
+                              onClick={e => { 
+                                e.stopPropagation(); 
+                                setOpenMenuTableId(openMenuTableId === table.id ? null : table.id); 
+                              }} 
+                              className={`p-2 rounded-xl transition-all ${
+                                openMenuTableId === table.id
+                                  ? (isDarkMode ? 'bg-white/10 text-white shadow-lg' : 'bg-slate-100 text-slate-900 shadow-sm')
+                                  : (isDarkMode ? 'hover:bg-white/10 text-slate-500 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900')
+                              }`}
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
 
-                          <AnimatePresence>
-                            {openMenuTableId === table.id && (
-                              <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                className={`absolute right-0 top-full mt-2 w-48 rounded-2xl shadow-2xl z-50 border p-1.5 backdrop-blur-xl ${
-                                  isDarkMode ? 'bg-[#1a1a23]/95 border-white/10' : 'bg-white/95 border-slate-200'
-                                }`}
-                                onClick={e => e.stopPropagation()}
-                              >
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setDeleteConfirm({ id: table.id, name: table.name, type: 'table' });
-                                    setOpenMenuTableId(null);
-                                  }}
-                                  className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
+                            <AnimatePresence>
+                              {openMenuTableId === table.id && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                  className={`absolute right-0 top-full mt-2 w-48 rounded-2xl shadow-2xl z-50 border p-1.5 backdrop-blur-xl ${
+                                    isDarkMode ? 'bg-[#1a1a23]/95 border-white/10' : 'bg-white/95 border-slate-200'
+                                  }`}
+                                  onClick={e => e.stopPropagation()}
                                 >
-                                  <Trash2 className="w-4 h-4" />
-                                  Eliminar tabla
-                                </button>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenMenuTableId(null);
+                                      onOpenTable(selectedProject.id, table.id);
+                                    }}
+                                    className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                                      isDarkMode ? 'text-slate-300 hover:bg-white/10 hover:text-white' : 'text-slate-700 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    <Database className="w-4 h-4" />
+                                    Abrir tabla
+                                  </button>
+                                  <div className={`my-1 h-px ${isDarkMode ? 'bg-white/5' : 'bg-slate-100'}`} />
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setDeleteConfirm({ id: table.id, name: table.name, type: 'table' });
+                                      setOpenMenuTableId(null);
+                                    }}
+                                    className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Eliminar tabla
+                                  </button>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {projectTables.map(table => (
+                      <div
+                        key={table.id}
+                        onClick={() => handleTableClick(selectedProject.id, table.id)}
+                        onMouseEnter={() => setHoveredId(table.id)}
+                        onMouseLeave={() => setHoveredId(null)}
+                        className={`relative group flex flex-col items-center gap-4 p-6 card-standard ${
+                          isDarkMode ? 'card-dark' : 'card-light'
+                        } cursor-pointer text-center shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]`}
+                      >
+                        <div className={`w-16 h-16 rounded-[28%] flex items-center justify-center text-xl font-black text-white shadow-xl ${hashColor(table.id, TABLE_COLORS)}`}>
+                          {initials(table.name)}
+                        </div>
+                        <div className="min-w-0 w-full">
+                          <h3 className={`text-sm font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{table.name}</h3>
+                          <p className="text-[10px] text-slate-500 mt-1.5 font-medium">Último cambio: {timeAgo(table.createdAt)}</p>
+                        </div>
+                        
+                        <div className={`absolute top-3 right-3 flex items-center gap-1 transition-opacity ${hoveredId === table.id || table.favoriteBy?.includes(user?.email?.toLowerCase() || '') ? 'opacity-100' : 'opacity-0'}`}>
+                          <button 
+                            onClick={e => { e.stopPropagation(); useCampaignStore.getState().toggleTableFavorite(table.id); }} 
+                            className={`p-1.5 rounded-lg transition-colors ${table.favoriteBy?.includes(user?.email?.toLowerCase() || '') ? 'text-amber-400 bg-amber-400/10' : (isDarkMode ? 'hover:bg-white/10 text-slate-500' : 'hover:bg-slate-100 text-slate-400')}`}
+                          >
+                            <Star className="w-3.5 h-3.5" fill={table.favoriteBy?.includes(user?.email?.toLowerCase() || '') ? 'currentColor' : 'none'} />
+                          </button>
+                          <button
+                            onClick={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDeleteConfirm({ id: table.id, name: table.name, type: 'table' });
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                   
                   {projectTables.length === 0 && (
                     <div className={`p-12 rounded-3xl border border-dashed text-center flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'border-white/5 bg-white/[0.02]' : 'border-slate-200 bg-slate-50'}`}>
@@ -486,8 +539,8 @@ export default function HomePage({
                     </div>
                   )}
                 </div>
-              </div>
-            </main>
+              </main>
+
 
             <AnimatePresence>
               {showInfoPanel && (
@@ -667,7 +720,6 @@ export default function HomePage({
               </button>
             )}
           </div>
-        </div>
 
         <AnimatePresence>
           {isMemberModalOpen && selectedProject && (
@@ -860,6 +912,7 @@ export default function HomePage({
           )}
         </AnimatePresence>
       </div>
+    </div>
     );
   }
 
@@ -890,22 +943,6 @@ export default function HomePage({
           
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              {userData?.role === 'admin' && (
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Notificaciones
-                  </span>
-                  <button 
-                    onClick={() => setIsAiOpen(!isAiOpen)}
-                    className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
-                  >
-                    <motion.span 
-                      animate={{ x: isAiOpen ? 16 : 2 }}
-                      className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
-                    />
-                  </button>
-                </div>
-              )}
               
               <button
                 onClick={toggleDarkMode}
@@ -929,20 +966,7 @@ export default function HomePage({
           </div>
 
           <div className="w-1/4 flex items-center justify-end gap-3">
-            <div className={`flex items-center p-1 border rounded-xl overflow-hidden ${isDarkMode ? 'bg-white/[0.03] border-white/10' : 'bg-slate-100/80 border-slate-200'}`}>
-              <button 
-                onClick={() => setViewMode('list')} 
-                className={`p-1.5 rounded-lg transition-all ${viewMode==='list'?(isDarkMode ? 'bg-white/10 text-white shadow-lg' : 'bg-white text-brand-600 shadow-sm'):'text-slate-500 hover:text-slate-300'}`}
-              >
-                <List className="w-3.5 h-3.5" />
-              </button>
-              <button 
-                onClick={() => setViewMode('grid')} 
-                className={`p-1.5 rounded-lg transition-all ${viewMode==='grid'?(isDarkMode ? 'bg-white/10 text-white shadow-lg' : 'bg-white text-brand-600 shadow-sm'):'text-slate-500 hover:text-slate-300'}`}
-              >
-                <Grid3X3 className="w-3.5 h-3.5" />
-              </button>
-            </div>
+
             <button onClick={onCreateProject} className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-brand-600/20 active:scale-95">
               <Plus className="w-4 h-4" />
               Nuevo espacio
@@ -970,7 +994,7 @@ export default function HomePage({
               )}
 
               {/* List view (Projects) */}
-              {viewMode === 'list' && filteredProjects.length > 0 && (
+              {filteredProjects.length > 0 && (
                 <div className="space-y-1.5 max-w-3xl">
                   {filteredProjects.map(proj => (
                     <div
@@ -1245,7 +1269,7 @@ export default function HomePage({
           />
         )}
       </AnimatePresence>
-      <AIChat user={user} userData={userData} />
+      {selectedProjectId && <AIChat user={user} userData={userData} />}
     </div>
   );
 }

@@ -505,7 +505,7 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-3">
-          {userData?.role === 'admin' && (
+          {(userData?.role === 'admin' || user?.uid === 'RXH1eN22BtUAdJBrK4bPR3AxiO52') && (
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
               <span className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                 Notificaciones
@@ -602,6 +602,23 @@ export default function App() {
                 }`}
               >
                 <span>{table.name}</span>
+
+                {table.type === 'requests' && !table.isInitial && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      /* Botón COPIAR LINK movido a la pestaña de cada tabla */
+                      const url = `${window.location.origin}/form/${table.id}`;
+                      navigator.clipboard.writeText(url).then(() => {
+                        showToast('Link de formulario copiado', 'info');
+                      });
+                    }}
+                    className={`ml-2 p-1 rounded-md transition-all hover:bg-emerald-500/10 text-emerald-500`}
+                    title="Copiar link del formulario"
+                  >
+                    <Globe className="w-3 h-3" />
+                  </button>
+                )}
                 
                 <div className="flex items-center ml-2 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
@@ -771,7 +788,7 @@ export default function App() {
         />
 
         {/* AI Chat — Admin Only, Secret FAB */}
-        <AIChat userData={userData} user={user} />
+        {!showHome && <AIChat userData={userData} user={user} />}
 
       </main>
     </div>

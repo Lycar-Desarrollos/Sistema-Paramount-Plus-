@@ -552,28 +552,7 @@ export default function GridEngine() {
             />
           </div>
           
-          {/* Botón COPIAR LINK — SOLO para tablas de tipo 'requests' (Formulario Cliente) */}
-          {(activeTable?.type === 'requests') && (() => {
-            const formUrl = `${window.location.origin}/form/${activeTableId}`;
-            return (
-              <button
-                id="copy-link-btn"
-                onClick={() => {
-                  navigator.clipboard.writeText(formUrl).then(() => {
-                    const btn = document.getElementById('copy-link-btn');
-                    if (btn) {
-                      btn.innerHTML = '✓ COPIADO';
-                      setTimeout(() => { btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;margin-right:4px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>COPIAR LINK'; }, 2000);
-                    }
-                  });
-                }}
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
-              >
-                <Link2 className="w-3.5 h-3.5" />
-                COPIAR LINK
-              </button>
-            );
-          })()}
+          {/* Botón COPIAR LINK movido a la pestaña de cada tabla en App.tsx */}
 
           <button 
             onClick={() => {

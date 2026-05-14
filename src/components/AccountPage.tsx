@@ -229,7 +229,6 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
         </div>
       </main>
 
-      <AIChat />
     </div>
   );
 }

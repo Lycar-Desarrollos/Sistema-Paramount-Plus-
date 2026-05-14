@@ -112,7 +112,12 @@ export default function PublicFormView() {
         tableId: tableDef.id,
         workspaceId: tableDef.projectId,
         projectId: tableDef.projectId,
-        values: finalData,
+        values: {
+          ...finalData,
+          ...(tableDef.columnDefinitions.some((c: any) => c.id === 'folio') && !finalData.folio ? {
+            folio: `NT-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`
+          } : {})
+        },
         createdAt: Date.now(),
         updatedAt: Date.now(),
         source: 'public_form',
@@ -201,18 +206,18 @@ export default function PublicFormView() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 sm:p-10 space-y-8">
           {(tableDef?.columnDefinitions || []).map((col: ColumnDefinition) => {
-            if (col.type === 'user' || col.type === 'link') return null;
+            if (col.type === 'user' || col.type === 'link' || col.id === 'folio') return null;
 
             return (
               <div key={col.id} className="space-y-2">
                 <label className="block text-sm font-bold text-slate-900">
                   {col.name}
-                  {col.type !== 'attachment' && <span className="text-red-500 ml-0.5">*</span>}
+                  {col.required && <span className="text-red-500 ml-0.5">*</span>}
                 </label>
 
                 {/* TEXT */}
                 {col.type === 'text' && (
-                  <input type="text" required className={inputCls}
+                  <input type="text" required={col.required} className={inputCls}
                     placeholder={`Ingresa ${col.name.toLowerCase()}...`}
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
@@ -221,7 +226,7 @@ export default function PublicFormView() {
 
                 {/* NUMBER */}
                 {col.type === 'number' && (
-                  <input type="number" required className={inputCls}
+                  <input type="number" required={col.required} className={inputCls}
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: Number(e.target.value) })}
                   />
@@ -229,7 +234,7 @@ export default function PublicFormView() {
 
                 {/* SELECT */}
                 {col.type === 'select' && (
-                  <select required className={`${inputCls} appearance-none`}
+                  <select required={col.required} className={`${inputCls} appearance-none`}
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
                   >
@@ -242,7 +247,7 @@ export default function PublicFormView() {
 
                 {/* DATE */}
                 {col.type === 'date' && (
-                  <input type="date" required className={inputCls}
+                  <input type="date" required={col.required} className={inputCls}
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
                   />
@@ -250,7 +255,7 @@ export default function PublicFormView() {
 
                 {/* PHONE */}
                 {col.type === 'phone' && (
-                  <input type="tel" required className={inputCls}
+                  <input type="tel" required={col.required} className={inputCls}
                     placeholder="Ej: +52 55 1234 5678"
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
@@ -259,7 +264,7 @@ export default function PublicFormView() {
 
                 {/* EMAIL */}
                 {col.type === 'email' && (
-                  <input type="email" required className={inputCls}
+                  <input type="email" required={col.required} className={inputCls}
                     placeholder="correo@ejemplo.com"
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}

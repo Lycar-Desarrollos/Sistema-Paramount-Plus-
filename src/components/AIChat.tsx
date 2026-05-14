@@ -46,7 +46,7 @@ export default function AIChat({ userData, user }: AIChatProps) {
   // Check admin status
   const MASTER_ADMIN_UID = 'RXH1eN22BtUAdJBrK4bPR3AxiO52';
   const isMasterAdmin = user?.uid === MASTER_ADMIN_UID;
-  const isAdmin = userData?.role === 'admin' || isMasterAdmin || user?.email?.includes('admin');
+  const isAdmin = userData?.role === 'admin' || isMasterAdmin;
 
   console.log('[AIChat] State:', { isAiOpen, isAdmin, userEmail: user?.email, role: userData?.role });
 
