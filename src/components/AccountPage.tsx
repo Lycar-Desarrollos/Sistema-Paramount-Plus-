@@ -9,7 +9,7 @@ import { Sparkles } from 'lucide-react';
 import { useToast } from './Toast';
 import { uploadToCloudinary, getCloudinaryThumbnail } from '../services/cloudinary';
 import AIChat from './AIChat';
-import UserMenu from './UserMenu';
+import { UserMenu } from './UserMenu';
 
 interface Props {
   user: any;
@@ -22,6 +22,8 @@ interface Props {
 export default function AccountPage({ user, userData, onBack, isProMode, onToggleProMode }: Props) {
   const { showToast } = useToast();
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const { isAiOpen, setIsAiOpen } = useCampaignStore();
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const [displayName, setDisplayName] = useState(userData?.displayName || user?.displayName || '');
   const [description, setDescription] = useState(userData?.description || '');
   const [loading, setLoading] = useState(false);
@@ -95,11 +97,11 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
                 Notificaciones
               </span>
               <button 
-                onClick={() => useCampaignStore.getState().setIsAiOpen(!useCampaignStore.getState().isAiOpen)}
-                className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${useCampaignStore.getState().isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
+                onClick={() => setIsAiOpen(!isAiOpen)}
+                className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
               >
                 <motion.span 
-                  animate={{ x: useCampaignStore.getState().isAiOpen ? 16 : 2 }}
+                  animate={{ x: isAiOpen ? 16 : 2 }}
                   className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
                 />
               </button>

@@ -48,6 +48,8 @@ export default function HomePage({
   isProMode
 }: HomePageProps) {
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const { isAiOpen, setIsAiOpen } = useCampaignStore();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     localStorage.getItem('natic_selected_project') || null
   );
@@ -896,11 +898,11 @@ export default function HomePage({
                     Notificaciones
                   </span>
                   <button 
-                    onClick={() => useCampaignStore.getState().setIsAiOpen(!useCampaignStore.getState().isAiOpen)}
-                    className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${useCampaignStore.getState().isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
+                    onClick={() => setIsAiOpen(!isAiOpen)}
+                    className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
                   >
                     <motion.span 
-                      animate={{ x: useCampaignStore.getState().isAiOpen ? 16 : 2 }}
+                      animate={{ x: isAiOpen ? 16 : 2 }}
                       className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
                     />
                   </button>
@@ -1245,6 +1247,7 @@ export default function HomePage({
           />
         )}
       </AnimatePresence>
+      <AIChat user={user} userData={userData} />
     </div>
   );
 }

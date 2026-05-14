@@ -206,6 +206,7 @@ const AVATAR_COLORS = [
 
 export default function TeamPage({ onBack, user, userData, isProMode, onToggleProMode, activeProjectId }: Props) {
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const { isAiOpen, setIsAiOpen } = useCampaignStore();
   
   const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const hashColor = (id: string, palette: string[]) => palette[id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % palette.length];
@@ -513,11 +514,11 @@ export default function TeamPage({ onBack, user, userData, isProMode, onTogglePr
                       Notificaciones
                     </span>
                     <button 
-                      onClick={() => useCampaignStore.getState().setIsAiOpen(!useCampaignStore.getState().isAiOpen)}
-                      className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${useCampaignStore.getState().isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
+                      onClick={() => setIsAiOpen(!isAiOpen)}
+                      className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
                     >
                       <motion.span 
-                        animate={{ x: useCampaignStore.getState().isAiOpen ? 16 : 2 }}
+                        animate={{ x: isAiOpen ? 16 : 2 }}
                         className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
                       />
                     </button>
