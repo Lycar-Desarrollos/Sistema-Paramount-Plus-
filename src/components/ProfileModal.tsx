@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { X, Camera, Save, Loader2, User } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from './Toast';
+import { uploadToCloudinary, getCloudinaryThumbnail } from '../services/cloudinary';
 
 interface Props {
   user: any;
@@ -36,49 +37,25 @@ export default function ProfileModal({ user, userData, onClose }: Props) {
     try {
       let finalPhotoUrl = previewUrl;
 
-      // Upload new photo if selected
+      // Upload new photo to Cloudinary using unsigned preset (natic_unsigned)
       if (photoFile) {
-        const timestamp = Math.round((new Date).getTime()/1000);
-        const apiSecret = "b3GNz3bXIEZZWnTXkEiNwIFMTao";
-        const strToSign = `timestamp=${timestamp}${apiSecret}`;
-
-        const encoder = new TextEncoder();
-        const data = encoder.encode(strToSign);
-        const hashBuffer = await crypto.subtle.digest('SHA-1', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const signature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-        const formData = new FormData();
-        formData.append("file", photoFile);
-        formData.append("api_key", "838234118983858");
-        formData.append("timestamp", timestamp.toString());
-        formData.append("signature", signature);
-
-        const res = await fetch("https://api.cloudinary.com/v1_1/doylm03ih/image/upload", {
-          method: "POST",
-          body: formData
-        });
-
-        if (!res.ok) {
-          throw new Error("Failed to upload image to Cloudinary");
-        }
-        
-        const json = await res.json();
-        finalPhotoUrl = json.secure_url;
+        const result = await uploadToCloudinary(photoFile, `naticbox/profile_photos/${user.uid}`);
+        // Use optimized thumbnail for profile display
+        finalPhotoUrl = getCloudinaryThumbnail(result.url, 400, 400);
       }
 
-      // Update Firestore user document
-      await updateDoc(doc(db, 'users', user.uid), {
+      // Update Firestore user document (setDoc with merge to handle legacy users)
+      await setDoc(doc(db, 'users', user.uid), {
         displayName: displayName.trim(),
         description: description.trim(),
         ...(finalPhotoUrl && { photoURL: finalPhotoUrl })
-      });
+      }, { merge: true });
 
       showToast("Perfil actualizado correctamente", "success");
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating profile:", error);
-      showToast("Error al actualizar el perfil.", "error");
+      showToast(error.message || "Error al actualizar el perfil.", "error");
     } finally {
       setLoading(false);
     }

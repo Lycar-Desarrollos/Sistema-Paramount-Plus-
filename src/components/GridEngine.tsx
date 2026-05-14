@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2, Calendar, Link2, User, ChevronDown, X, Loader2, Maximize2, Rows, List, Paperclip, Upload, FileText } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2, Calendar, Link2, ExternalLink, User, ChevronDown, X, Loader2, Maximize2, Rows, List, Paperclip, Upload, FileText } from 'lucide-react';
 import { useCampaignStore, type ColumnDefinition, type ColumnType, type RecordData } from '../store/useCampaignStore';
 import { cn, hashColor, AVATAR_COLORS } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { uploadToCloudinary, getCloudinaryThumbnail } from '../services/cloudinary';
 
 const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -158,54 +157,78 @@ const DynamicCell = ({ record, column, setIsLinkingRecord }: { record: RecordDat
 
         setIsUploading(true);
         try {
-          const storageRef = ref(storage, `attachments/${record.id}/${file.name}`);
-          await uploadBytes(storageRef, file);
-          const url = await getDownloadURL(storageRef);
-          
+          const result = await uploadToCloudinary(file, `naticbox/attachments/${record.id}`);
           const newAttachment = {
-            name: file.name,
-            url,
-            type: file.type,
-            size: file.size,
-            storagePath: `attachments/${record.id}/${file.name}`,
+            name: result.name,
+            url: result.url,
+            type: result.type,
+            size: result.size,
+            publicId: result.publicId,
             uploadedAt: Date.now()
           };
-
           handleUpdate([...attachments, newAttachment]);
         } catch (error) {
-          console.error('Error uploading file:', error);
+          console.error('Error uploading to Cloudinary:', error);
         } finally {
           setIsUploading(false);
         }
       };
 
+      const isImage = (file: any) =>
+        file.type?.startsWith('image/') ||
+        /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(file.name || '');
+
       return (
-        <td className="p-0 border-r min-w-[180px] group/attach relative">
-          <div className="px-3 min-h-[44px] flex flex-wrap gap-1.5 py-2 items-center">
+        <td className="p-0 border-r min-w-[200px] group/attach relative">
+          <div className="px-2 min-h-[44px] flex flex-wrap gap-1.5 py-1.5 items-center">
             {attachments.map((file: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-slate-400 group/file">
-                {file.type?.includes('pdf') || file.name?.toLowerCase().endsWith('.pdf') ? (
-                  <FileText className="w-3 h-3 text-red-400" />
-                ) : (
-                  <Paperclip className="w-3 h-3" />
-                )}
-                <a href={file.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[80px] hover:text-brand-500 transition-colors">
-                  {file.name}
-                </a>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const newFiles = attachments.filter((_: any, i: number) => i !== idx);
-                    handleUpdate(newFiles);
-                  }}
-                  className="hover:text-red-500 opacity-0 group-hover/file:opacity-100 transition-opacity"
-                ><X className="w-2.5 h-2.5" /></button>
-              </div>
+              isImage(file) ? (
+                // IMAGE THUMBNAIL
+                <div key={idx} className="relative group/img flex-shrink-0">
+                  <a href={file.url} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={getCloudinaryThumbnail(file.url, 32, 32)}
+                      alt={file.name}
+                      className="w-8 h-8 rounded-lg object-cover border border-white/10 hover:border-brand-500 transition-all hover:scale-110 cursor-zoom-in shadow"
+                    />
+                  </a>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUpdate(attachments.filter((_: any, i: number) => i !== idx));
+                    }}
+                    className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity shadow"
+                  >
+                    <X className="w-2 h-2" />
+                  </button>
+                </div>
+              ) : (
+                // FILE CHIP (pdf, doc, etc.)
+                <div key={idx} className="flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-slate-400 group/file">
+                  {file.type?.includes('pdf') || file.name?.toLowerCase().endsWith('.pdf') ? (
+                    <FileText className="w-3 h-3 text-red-400 flex-shrink-0" />
+                  ) : (
+                    <Paperclip className="w-3 h-3 flex-shrink-0" />
+                  )}
+                  <a href={file.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[80px] hover:text-brand-500 transition-colors">
+                    {file.name}
+                  </a>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUpdate(attachments.filter((_: any, i: number) => i !== idx));
+                    }}
+                    className="hover:text-red-500 opacity-0 group-hover/file:opacity-100 transition-opacity"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              )
             ))}
-            
-            <label className="cursor-pointer p-1.5 rounded-lg hover:bg-brand-500/10 text-slate-500 hover:text-brand-500 transition-all">
+
+            <label className="cursor-pointer p-1.5 rounded-lg hover:bg-brand-500/10 text-slate-500 hover:text-brand-500 transition-all flex-shrink-0">
               {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              <input type="file" className="hidden" onChange={handleFileUpload} />
+              <input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={handleFileUpload} />
             </label>
           </div>
         </td>
@@ -218,10 +241,13 @@ const DynamicCell = ({ record, column, setIsLinkingRecord }: { record: RecordDat
       const members = project?.memberEmails || [];
       const allUsers = useCampaignStore.getState().allUsers;
       
-      const email = String(value || '').toLowerCase();
-      const userMatch = allUsers.find(u => u.email.toLowerCase() === email);
-      const displayName = userMatch?.displayName || email.split('@')[0] || email;
-      const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      // Parsear valor existente (puede ser string separado por comas o array, normalizamos a array de strings)
+      let selectedEmails: string[] = [];
+      if (Array.isArray(value)) {
+        selectedEmails = value.map(v => String(v).toLowerCase());
+      } else if (typeof value === 'string' && value.trim() !== '') {
+        selectedEmails = value.split(',').map(v => v.trim().toLowerCase());
+      }
 
       return (
         <td className="p-0 border-r min-w-[180px] group/user relative">
@@ -229,59 +255,87 @@ const DynamicCell = ({ record, column, setIsLinkingRecord }: { record: RecordDat
             <div className={`absolute top-0 left-0 w-full min-w-[240px] z-[100] p-2 ${isDarkMode ? 'bg-[#0f0f15] shadow-[0_20px_50px_rgba(0,0,0,0.5)]' : 'bg-white shadow-2xl border border-slate-200'} rounded-2xl border border-white/5`}>
               <div className="flex flex-col gap-1 max-h-[280px] overflow-y-auto custom-scrollbar">
                 <button 
-                  onClick={() => handleUpdate('')}
+                  onClick={() => handleUpdate([])}
                   className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-[10px] font-black uppercase tracking-widest transition-all ${
                     isDarkMode ? 'hover:bg-white/5 text-slate-500 hover:text-white' : 'hover:bg-slate-50 text-slate-400 hover:text-slate-900'
                   }`}
                 >
                   <X className="w-3 h-3" />
-                  Desasignar
+                  Desasignar todos
                 </button>
                 <div className="h-px bg-white/5 my-1" />
                 {members.map(mEmail => {
                   const mMatch = allUsers.find(u => u.email.toLowerCase() === mEmail.toLowerCase());
                   const mName = mMatch?.displayName || mEmail.split('@')[0];
+                  const isSelected = selectedEmails.includes(mEmail.toLowerCase());
+
                   return (
                     <button 
                       key={mEmail}
-                      onClick={() => handleUpdate(mEmail)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        let newSelected;
+                        if (isSelected) {
+                          newSelected = selectedEmails.filter(e => e !== mEmail.toLowerCase());
+                        } else {
+                          newSelected = [...selectedEmails, mEmail.toLowerCase()];
+                        }
+                        handleUpdate(newSelected);
+                      }}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
-                        isDarkMode ? 'hover:bg-brand-500/10 hover:text-white' : 'hover:bg-slate-50'
+                        isSelected 
+                          ? (isDarkMode ? 'bg-brand-500/20 text-white' : 'bg-brand-50 text-brand-900')
+                          : (isDarkMode ? 'hover:bg-brand-500/10 hover:text-white' : 'hover:bg-slate-50')
                       }`}
                     >
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0 ${hashColor(mEmail, AVATAR_COLORS)}`}>
                         {mName[0].toUpperCase()}
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-black truncate">{mName}</p>
-                        <p className="text-[9px] font-bold text-slate-500 truncate">{mEmail}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-[11px] font-black truncate ${isSelected ? (isDarkMode ? 'text-white' : 'text-brand-900') : ''}`}>{mName}</p>
+                        <p className={`text-[9px] font-bold truncate ${isSelected ? (isDarkMode ? 'text-brand-200' : 'text-brand-600') : 'text-slate-500'}`}>{mEmail}</p>
                       </div>
+                      {isSelected && <CheckCircle2 className="w-4 h-4 text-brand-500 shrink-0" />}
                     </button>
                   );
                 })}
-                {members.length === 0 && <span className="p-4 text-[10px] text-slate-500 italic text-center">Invita colaboradores al proyecto</span>}
               </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(false);
+                }}
+                className={`w-full mt-2 py-2 text-xs font-bold rounded-xl ${isDarkMode ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-slate-100 text-slate-900 hover:bg-slate-200'}`}
+              >
+                Cerrar
+              </button>
             </div>
           ) : (
-            <div 
+            <div
               onClick={() => setEditing(true)}
-              className="px-3 min-h-[44px] flex items-center cursor-pointer group/pill"
+              className="px-3 min-h-[44px] flex items-center gap-1 overflow-x-auto custom-scrollbar"
             >
-              {value ? (
-                <div className={`flex items-center gap-2.5 px-2 py-1 rounded-full border transition-all ${
-                  isDarkMode ? 'bg-white/5 border-white/5 group-hover/pill:bg-white/10' : 'bg-slate-100 border-slate-200 group-hover/pill:bg-slate-200'
-                }`}>
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white shrink-0 shadow-sm ${hashColor(email, AVATAR_COLORS)}`}>
-                    {initials[0]}
-                  </div>
-                  <span className="text-[11px] font-black truncate max-w-[120px]">{displayName}</span>
-                </div>
+              {selectedEmails.length > 0 ? (
+                selectedEmails.map((email, idx) => {
+                  const match = allUsers.find(u => u.email.toLowerCase() === email);
+                  const name = match?.displayName || email.split('@')[0];
+                  const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                  return (
+                    <div
+                      key={idx}
+                      title={email}
+                      className={`h-6 rounded-full flex items-center gap-1.5 px-1.5 border border-white/5 shrink-0 ${hashColor(email, AVATAR_COLORS)}`}
+                    >
+                      <span className="text-[9px] font-black text-white ml-0.5">{initials}</span>
+                    </div>
+                  );
+                })
               ) : (
-                <div className="flex items-center gap-2 text-slate-600 group-hover/pill:text-brand-500 transition-colors">
-                  <div className={`w-6 h-6 rounded-full border border-dashed flex items-center justify-center transition-colors ${isDarkMode ? 'border-white/10' : 'border-slate-300'}`}>
-                    <User className="w-3 h-3" />
+                <div className="flex items-center gap-2 opacity-0 group-hover/user:opacity-100 transition-opacity">
+                  <div className="w-6 h-6 rounded-full border border-dashed border-slate-600 flex items-center justify-center text-slate-500">
+                    <Plus className="w-3 h-3" />
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest opacity-40 group-hover/pill:opacity-100">Asignar...</span>
+                  <span className="text-[10px] font-black text-slate-500">Asignar</span>
                 </div>
               )}
             </div>
@@ -383,6 +437,7 @@ export default function GridEngine() {
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
   const [groupBy, setGroupBy] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+  const [detailRecord, setDetailRecord] = useState<RecordData | null>(null);
   
   const tables = useCampaignStore(state => state.tables);
   const activeTable = tables.find(t => t.id === activeTableId);
@@ -497,19 +552,28 @@ export default function GridEngine() {
             />
           </div>
           
-          {activeTable?.type === 'requests' && (
-            <button 
-              onClick={() => {
-                const url = `${window.location.origin}/form/${activeTableId}`;
-                navigator.clipboard.writeText(url);
-                alert('Enlace del formulario copiado al portapapeles');
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
-            >
-              <Link2 className="w-4 h-4" />
-              COPIAR ENLACE
-            </button>
-          )}
+          {/* Botón COPIAR LINK — SOLO para tablas de tipo 'requests' (Formulario Cliente) */}
+          {(activeTable?.type === 'requests') && (() => {
+            const formUrl = `${window.location.origin}/form/${activeTableId}`;
+            return (
+              <button
+                id="copy-link-btn"
+                onClick={() => {
+                  navigator.clipboard.writeText(formUrl).then(() => {
+                    const btn = document.getElementById('copy-link-btn');
+                    if (btn) {
+                      btn.innerHTML = '✓ COPIADO';
+                      setTimeout(() => { btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;margin-right:4px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>COPIAR LINK'; }, 2000);
+                    }
+                  });
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
+              >
+                <Link2 className="w-3.5 h-3.5" />
+                COPIAR LINK
+              </button>
+            );
+          })()}
 
           <button 
             onClick={() => {
@@ -647,7 +711,7 @@ export default function GridEngine() {
                           }`}
                         >
                           <td className="w-[40px] border-r p-0 text-center">
-                            <div className="flex items-center justify-center">
+                            <div className="flex items-center justify-center gap-1 group/row">
                               <input 
                                 type="checkbox"
                                 checked={selectedIds.includes(rec.id)}
@@ -655,8 +719,15 @@ export default function GridEngine() {
                                   if (selectedIds.includes(rec.id)) setSelectedIds(selectedIds.filter(i => i !== rec.id));
                                   else setSelectedIds([...selectedIds, rec.id]);
                                 }}
-                                className="accent-brand-500"
+                                className="accent-brand-500 group-hover/row:hidden"
                               />
+                              <button
+                                onClick={() => setDetailRecord(rec)}
+                                className="hidden group-hover/row:flex items-center justify-center w-5 h-5 rounded-md hover:bg-brand-500/20 text-slate-500 hover:text-brand-400 transition-all"
+                                title="Ver detalle"
+                              >
+                                <Maximize2 className="w-3 h-3" />
+                              </button>
                             </div>
                           </td>
                           {(columnDefinitions || []).map(col => (
@@ -742,6 +813,173 @@ export default function GridEngine() {
           </div>
         )}
       </div>
+
+      {/* ── RECORD DETAIL MODAL ── */}
+      <AnimatePresence>
+        {detailRecord && (() => {
+          const cols = columnDefinitions || [];
+          const allUsers = useCampaignStore.getState().allUsers;
+          return (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={() => setDetailRecord(null)}
+                className="absolute inset-0 bg-black/70 backdrop-blur-md"
+              />
+              <motion.div
+                initial={{ scale: 0.94, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.94, opacity: 0, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className={`relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-3xl overflow-hidden border shadow-2xl ${
+                  isDarkMode ? 'bg-[#0f0f15] border-white/10' : 'bg-white border-slate-200'
+                }`}
+              >
+                {/* Header */}
+                <div className={`flex items-center justify-between px-8 py-6 border-b ${
+                  isDarkMode ? 'border-white/5' : 'border-slate-100'
+                }`}>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1">{activeTable?.name}</p>
+                    <h2 className={`text-xl font-black tracking-tight ${
+                      isDarkMode ? 'text-white' : 'text-slate-900'
+                    }`}>
+                      {(() => {
+                        const firstText = cols.find(c => c.type === 'text');
+                        const val = firstText ? detailRecord.values?.[firstText.id] : null;
+                        return val ? String(val) : 'Registro';
+                      })()}
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => setDetailRecord(null)}
+                    className={`p-2.5 rounded-xl transition-all ${
+                      isDarkMode ? 'hover:bg-white/5 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                  {cols.filter(c => c.type !== 'link').map(col => {
+                    const val = detailRecord.values?.[col.id];
+                    if (val === undefined || val === null || val === '') return null;
+
+                    return (
+                      <div key={col.id} className={`flex flex-col gap-2 pb-5 border-b last:border-0 ${
+                        isDarkMode ? 'border-white/5' : 'border-slate-100'
+                      }`}>
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                          {col.name}
+                        </p>
+
+                        {/* TEXT / NUMBER / DATE / EMAIL / PHONE */}
+                        {['text','number','date','email','phone'].includes(col.type) && (
+                          <p className={`text-sm font-semibold ${
+                            isDarkMode ? 'text-white' : 'text-slate-900'
+                          }`}>{String(val)}</p>
+                        )}
+
+                        {/* SELECT badge */}
+                        {col.type === 'select' && (() => {
+                          const opt = (col.config?.options || []).find((o: any) => o.label === val);
+                          return (
+                            <span
+                              className="inline-flex self-start px-3 py-1 rounded-xl text-xs font-black"
+                              style={{
+                                backgroundColor: opt?.color ? `${opt.color}25` : '#6366f125',
+                                color: opt?.color || '#6366f1',
+                                border: `1px solid ${opt?.color ? `${opt.color}40` : '#6366f140'}`,
+                              }}
+                            >
+                              {String(val)}
+                            </span>
+                          );
+                        })()}
+
+                        {/* CHECKBOX */}
+                        {col.type === 'checkbox' && (
+                          <div className={`flex items-center gap-2 text-sm font-semibold ${
+                            val ? 'text-emerald-500' : isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                          }`}>
+                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${
+                              val ? 'bg-emerald-500 border-emerald-500' : isDarkMode ? 'border-white/20' : 'border-slate-300'
+                            }`}>
+                              {val && <CheckCircle2 className="w-3 h-3 text-white" />}
+                            </div>
+                            {val ? 'Sí' : 'No'}
+                          </div>
+                        )}
+
+                        {/* USER */}
+                        {col.type === 'user' && (() => {
+                          const emails: string[] = Array.isArray(val) ? val : [String(val)];
+                          return (
+                            <div className="flex flex-wrap gap-2">
+                              {emails.map(email => {
+                                const u = allUsers.find((u: any) => u.email?.toLowerCase() === email.toLowerCase()) as any;
+                                return (
+                                  <div key={email} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-500/10 border border-brand-500/20">
+                                    {u?.photoURL ? (
+                                      <img src={u.photoURL} alt="" className="w-5 h-5 rounded-full object-cover" />
+                                    ) : (
+                                      <div className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-black text-white">
+                                        {email.charAt(0).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <span className="text-xs font-bold text-brand-400">
+                                      {u?.displayName || email.split('@')[0]}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+
+                        {/* ATTACHMENT */}
+                        {col.type === 'attachment' && Array.isArray(val) && (
+                          <div className="flex flex-wrap gap-3">
+                            {val.map((file: any, idx: number) => {
+                              const isImg = file.type?.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp)$/i.test(file.name || '');
+                              return isImg ? (
+                                <a key={idx} href={file.url} target="_blank" rel="noopener noreferrer"
+                                  className="block w-24 h-24 rounded-2xl overflow-hidden border border-white/10 hover:border-brand-500 transition-all shadow-lg hover:scale-105">
+                                  <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
+                                </a>
+                              ) : (
+                                <a key={idx} href={file.url} target="_blank" rel="noopener noreferrer"
+                                  className={`flex items-center gap-2 px-4 py-3 rounded-2xl border text-xs font-bold transition-all hover:border-brand-500 ${
+                                    isDarkMode ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+                                  }`}>
+                                  <FileText className="w-4 h-4 text-red-400" />
+                                  {file.name || 'Archivo'}
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Footer */}
+                <div className={`px-8 py-4 border-t flex items-center justify-between ${
+                  isDarkMode ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'
+                }`}>
+                  <p className="text-[10px] font-mono text-slate-500">ID: {detailRecord.id?.slice(-10)}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {detailRecord.createdAt ? new Date(detailRecord.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
 
       {/* Footer Info */}
       <div className={`h-8 border-t px-4 flex items-center justify-between text-[10px] font-bold text-slate-500 ${isDarkMode ? 'bg-[#0a0a0f] border-white/5' : 'bg-slate-50 border-slate-200'}`}>

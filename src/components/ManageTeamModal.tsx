@@ -173,7 +173,6 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
                   >
                     <option value="admin">Administrador</option>
                     <option value="colaborador">Colaborador</option>
-                    <option value="cliente">Cliente</option>
                   </select>
                 </div>
                 <div className="flex items-end">
@@ -197,7 +196,7 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
                   Colaboradores
                 </h4>
                 <div className="space-y-2">
-                  {members.filter(m => m.role !== 'cliente').map(member => (
+                  {members.map(member => (
                     <div key={member.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDarkMode ? 'bg-[#13131a] border-white/5 hover:border-white/10' : 'bg-white border-slate-200 hover:border-slate-300'} transition-all`}>
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${member.role === 'admin' ? 'bg-brand-500' : 'bg-slate-500'}`}>
@@ -220,7 +219,6 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
                         >
                           <option value="admin">Admin</option>
                           <option value="colaborador">Colaborador</option>
-                          <option value="cliente">Cliente</option>
                         </select>
                         <button 
                           onClick={() => handleDeleteMember(member.id, member.email)}
@@ -232,53 +230,6 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
                       </div>
                     </div>
                   ))}
-                </div>
-              </div>
-
-              {/* Clientes */}
-              <div className="space-y-3">
-                <h4 className={`text-[10px] font-black uppercase tracking-widest px-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Clientes
-                </h4>
-                <div className="space-y-2">
-                  {members.filter(m => m.role === 'cliente').map(member => (
-                    <div key={member.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDarkMode ? 'bg-[#13131a] border-white/5 hover:border-white/10' : 'bg-white border-slate-200 hover:border-slate-300'} transition-all`}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 bg-emerald-500`}>
-                          {member.email.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{member.email}</p>
-                          <p className={`text-[10px] font-bold uppercase tracking-wider text-emerald-500`}>
-                            Cliente VIP
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={member.role}
-                          onChange={(e) => handleChangeRole(member.id, member.email, e.target.value as UserRole)}
-                          className={`px-2 py-1.5 rounded-lg text-[10px] font-bold focus:outline-none ${
-                            isDarkMode ? 'bg-white/5 text-slate-300 hover:bg-white/10' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
-                        >
-                          <option value="admin">Admin</option>
-                          <option value="colaborador">Colaborador</option>
-                          <option value="cliente">Cliente</option>
-                        </select>
-                        <button 
-                          onClick={() => handleDeleteMember(member.id, member.email)}
-                          className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-slate-500 hover:text-red-400 hover:bg-red-500/10' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}
-                          title="Eliminar usuario"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {members.filter(m => m.role === 'cliente').length === 0 && (
-                    <p className="text-[10px] text-slate-500 italic px-1">No hay clientes asignados.</p>
-                  )}
                 </div>
               </div>
 

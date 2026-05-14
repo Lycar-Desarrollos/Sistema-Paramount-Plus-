@@ -23,10 +23,10 @@ export interface Project {
   name: string;
   createdAt: number;
   status: 'active' | 'archived';
+  visibility?: 'private' | 'public';
   favoriteBy?: string[];
   memberEmails?: string[];
   members?: Record<string, UserRole | 'owner'>;
-  clientPermissions?: Record<string, string[]>; // email -> array of table IDs
 }
 
 export type ColumnType = 'text' | 'number' | 'select' | 'date' | 'checkbox' | 'link' | 'user' | 'attachment';
@@ -124,7 +124,7 @@ export const DEFAULT_FORM_COLUMNS: ColumnDefinition[] = [
   { id: 'assets', name: 'Archivos de Referencia', type: 'attachment' },
 ];
 
-export type UserRole = 'admin' | 'colaborador' | 'cliente';
+export type UserRole = 'admin' | 'colaborador';
 
 interface CampaignStore {
   activeProjectId: string;
@@ -153,11 +153,11 @@ interface CampaignStore {
   updateColumn: (tableId: string, columnId: string, updates: Partial<ColumnDefinition>) => Promise<void>;
   fetchRecordsByTableId: (tableId: string) => Promise<RecordData[]>;
   updateProjectName: (id: string, newName: string) => Promise<void>;
+  updateProjectVisibility: (id: string, visibility: 'private' | 'public') => Promise<void>;
   updateTable: (id: string, newName: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   addMemberToProject: (projectId: string, email: string, role: UserRole) => Promise<void>;
   removeMemberFromProject: (projectId: string, email: string) => Promise<void>;
-  setClientPermissions: (projectId: string, email: string, tableIds: string[]) => Promise<void>;
   deleteTable: (id: string) => Promise<void>;
   importRows: (projectId: string, tableId: string, rows: any[]) => Promise<void>;
   toggleTableFavorite: (tableId: string) => Promise<void>;
@@ -171,6 +171,12 @@ interface CampaignStore {
   aiLoadingText: string;
   setAiLoadingText: (val: string) => void;
   triggerAiSimulation: (textSequence?: string[], duration?: number) => Promise<void>;
+  isAiOpen: boolean;
+  setIsAiOpen: (val: boolean) => void;
+  aiWindowState: 'open' | 'minimized';
+  setAiWindowState: (val: 'open' | 'minimized') => void;
+  chatMessages: { role: 'user' | 'ai'; content: string }[];
+  setChatMessages: (msgs: { role: 'user' | 'ai'; content: string }[]) => void;
 }
 
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
@@ -217,58 +223,127 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
     set({ loading: true });
 
-    // Filtramos los workspaces para que solo traiga donde el usuario es miembro
+    const userEmail = user.email.toLowerCase();
+    let projectIds: string[] = [];
+    let unsubTables = () => {};
+
+    // Simple rule: if you're in memberEmails, you see the workspace. Period.
     const q = query(
-      collection(db, 'workspaces'), 
-      where('memberEmails', 'array-contains', user.email.toLowerCase())
+      collection(db, 'workspaces'),
+      where('memberEmails', 'array-contains', userEmail)
     );
 
     const unsubWorkspaces = onSnapshot(q, (snapshot) => {
       const workspacesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
-      const sorted = workspacesData.sort((a, b) => a.createdAt - b.createdAt);
+      const uniqueWorkspaces = Array.from(new Map(workspacesData.map(item => [item.id, item])).values());
+      const sorted = uniqueWorkspaces.sort((a, b) => b.createdAt - a.createdAt);
+
       set({ projects: sorted, loading: false });
 
       if (sorted.length > 0 && !get().activeProjectId) {
         set({ activeProjectId: sorted[0].id });
+      }
+
+      // When the project list changes, restart the global tables listener
+      const newIds = sorted.map(p => p.id);
+      const idsChanged = newIds.sort().join(',') !== projectIds.sort().join(',');
+      if (idsChanged && newIds.length > 0) {
+        projectIds = newIds;
+        unsubTables(); // Cancel the previous listener
+
+        // Subscribe to ALL tables for ALL the user's projects at once.
+        // Firestore 'in' supports up to 30 values, chunk if needed.
+        const chunks: string[][] = [];
+        for (let i = 0; i < newIds.length; i += 30) {
+          chunks.push(newIds.slice(i, i + 30));
+        }
+
+        if (chunks.length === 1) {
+          // Single query — simple case
+          const tablesQ = query(collection(db, 'tables'), where('projectId', 'in', chunks[0]));
+          unsubTables = onSnapshot(tablesQ, (tSnap) => {
+            const allTables = tSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Table[];
+            const sortedTables = allTables.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+            // Preserve active table if it still belongs to a valid project
+            const currentActiveId = get().activeTableId;
+            const currentTables = get().tables;
+            const activeTableMeta = currentTables.find(t => t.id === currentActiveId);
+            const activeInNewList = sortedTables.find(t => t.id === currentActiveId);
+            const activeStillValid = activeInNewList || (activeTableMeta && newIds.includes(activeTableMeta.projectId));
+
+            set({ tables: sortedTables });
+
+            if (!activeStillValid && sortedTables.length > 0) {
+              set({ activeTableId: sortedTables[0].id });
+            }
+          }, (err) => console.error("Global tables listener error:", err));
+        } else {
+          // Multiple chunks — combine results (rare, for users with 30+ projects)
+          const allTablesMap = new Map<string, Table>();
+          const unsubs: (() => void)[] = [];
+          chunks.forEach(chunk => {
+            const tablesQ = query(collection(db, 'tables'), where('projectId', 'in', chunk));
+            const u = onSnapshot(tablesQ, (tSnap) => {
+              tSnap.docs.forEach(d => allTablesMap.set(d.id, { id: d.id, ...d.data() } as Table));
+              const sortedTables = Array.from(allTablesMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+              set({ tables: sortedTables });
+            });
+            unsubs.push(u);
+          });
+          unsubTables = () => unsubs.forEach(u => u());
+        }
       }
     }, (error) => {
       console.error("Error loading workspaces:", error);
       set({ loading: false });
     });
 
+    // Always try to load all users — Firestore rules already restrict who can list.
+    // If the user doesn't have permission, the error handler catches it silently.
     let unsubUsers = () => {};
-    const MASTER_ADMIN_UID = "0buVJpHGDMehlHphXsGxWCpPibP2";
-    if (userData?.role === 'admin' || user.uid === MASTER_ADMIN_UID) {
-      unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-        const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-        set({ allUsers: usersData });
-      }, (err) => {
+    unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      set({ allUsers: usersData });
+    }, (err) => {
+      // Permission denied means the user can't list all users — that's fine, allUsers stays []
+      if (!err.message?.includes('permission')) {
         console.error("Error in users listener:", err);
-      });
-    }
+      }
+    });
 
     return () => {
       unsubWorkspaces();
+      unsubTables();
       unsubUsers();
     };
   },
 
   initializeProjectData: (projectId: string) => {
     const tablesQuery = query(collection(db, 'tables'), where('projectId', '==', projectId));
+
     const unsubscribeTables = onSnapshot(tablesQuery, (snapshot) => {
       const tablesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Table[];
-      const sorted = tablesData.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-      
+      const sorted = tablesData.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      // Check BEFORE overwriting store — the current tables may have optimistic entries
+      // (e.g. a table just created that hasn't been confirmed by Firebase yet).
+      const currentActiveId = get().activeTableId;
+      const currentTables = get().tables; // may include optimistic entries
+      const activeTableMeta = currentTables.find(t => t.id === currentActiveId);
+      // The active table belongs to this project if it appears in either the snapshot
+      // (confirmed) or the optimistic store state with the same projectId.
+      const activeTableBelongsToProject =
+        sorted.find(t => t.id === currentActiveId) ||
+        (activeTableMeta?.projectId === projectId);
+
       set({ tables: sorted });
 
-      // Solo cambiamos la tabla activa si no hay una o si la actual ya no existe en este proyecto
-      const currentActiveId = get().activeTableId;
-      if (sorted.length > 0) {
-        if (!currentActiveId || !sorted.find(t => t.id === currentActiveId)) {
-          set({ activeTableId: sorted[0].id });
-        }
+      // Only auto-select the first table if we have no valid table for this project
+      if (sorted.length > 0 && !activeTableBelongsToProject) {
+        set({ activeTableId: sorted[0].id });
       }
-      
+
       set({ loading: false });
     }, (error) => {
       console.error("Error loading tables:", error);
@@ -279,22 +354,77 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   },
 
   initializeTableData: (tableId: string) => {
-    // Traemos solo los registros de la tabla activa para evitar bloqueos de seguridad
     const q = query(collection(db, 'campaigns'), where('tableId', '==', tableId));
-    
-    const unsubRecords = onSnapshot(q, (snapshot) => {
+
+    const unsubRecords = onSnapshot(q, async (snapshot) => {
       const fetchedRecords = snapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id
       })) as RecordData[];
-      
+
       const sorted = fetchedRecords.sort((a, b) => b.createdAt - a.createdAt);
-      set({ records: sorted });
-      
+
       const table = get().tables.find(t => t.id === tableId);
       if (table) {
         set({ columnDefinitions: table.columnDefinitions || [] });
       }
+
+      // ── Row-Level Security ──
+      // Lee el rol directamente del documento del usuario actual en Firestore.
+      // Esto funciona para colaboradores porque pueden leer su propio documento.
+      const currentUser = auth.currentUser;
+      const MASTER_ADMIN_UID = "RXH1eN22BtUAdJBrK4bPR3AxiO52";
+      const isMasterAdmin = currentUser?.uid === MASTER_ADMIN_UID;
+
+      let isAdmin = false;
+      if (currentUser && !isMasterAdmin) {
+        try {
+          // Primero intenta desde allUsers (ya cargado para admins)
+          const { allUsers } = get();
+          const userDoc = allUsers.find((u: any) => u.email?.toLowerCase() === currentUser.email?.toLowerCase()) as any;
+          if (userDoc) {
+            isAdmin = userDoc.role === 'admin';
+          } else {
+            // Fallback: leer directo de Firestore (para colaboradores cuyo allUsers está vacío)
+            const { getDoc: firestoreGetDoc } = await import('firebase/firestore');
+            const userSnap = await firestoreGetDoc(doc(db, 'users', currentUser.uid));
+            if (userSnap.exists()) {
+              isAdmin = userSnap.data()?.role === 'admin';
+            } else {
+              // Buscar por email si no hay doc por UID
+              const { getDocs: firestoreGetDocs, query: fQuery, collection: fCollection, where: fWhere } = await import('firebase/firestore');
+              const q2 = fQuery(fCollection(db, 'users'), fWhere('email', '==', currentUser.email?.toLowerCase()));
+              const snap2 = await firestoreGetDocs(q2);
+              if (!snap2.empty) {
+                isAdmin = snap2.docs[0].data()?.role === 'admin';
+              }
+            }
+          }
+        } catch {
+          // Si falla la lectura, asumimos colaborador (más seguro)
+          isAdmin = false;
+        }
+      }
+
+      if (!isAdmin && !isMasterAdmin && currentUser?.email) {
+        const myEmail = currentUser.email.toLowerCase();
+        const userCols = (table?.columnDefinitions || []).filter(c => c.type === 'user');
+        if (userCols.length > 0) {
+          const filtered = sorted.filter(record =>
+            userCols.some(col => {
+              const val = record.values?.[col.id];
+              if (!val) return false;
+              if (typeof val === 'string') return val.toLowerCase() === myEmail;
+              if (Array.isArray(val)) return val.some((v: string) => v?.toLowerCase() === myEmail);
+              return false;
+            })
+          );
+          set({ records: filtered });
+          return;
+        }
+      }
+
+      set({ records: sorted });
     }, (error) => {
       console.error("Error loading records:", error);
     });
@@ -314,6 +444,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
         createdAt: Date.now(),
         status: 'active',
         ownerId: user.uid,
+        visibility: 'private', // Default to private
         memberEmails: [email],
         members: { [email.replace(/\./g, '_')]: 'owner' }
       });
@@ -338,6 +469,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       const promises = Array.from({ length: 10 }).map((_, i) => {
         return addDoc(collection(db, 'campaigns'), {
           tableId: tableRef.id,
+          workspaceId: newProjectRef.id,
           values: emptyValues,
           createdBy: email,
           createdAt: Date.now() + i
@@ -377,7 +509,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
       // 1. Actualizamos la interfaz DE INMEDIATO
       set(state => ({
-        tables: [...state.tables, newTable].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)),
+        tables: [...state.tables, newTable].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
         activeTableId: tableId,
         columnDefinitions: columns
       }));
@@ -404,6 +536,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       const promises = Array.from({ length: 10 }).map((_, i) => {
         return addDoc(collection(db, 'campaigns'), {
           tableId: tableId,
+          workspaceId: projectId,
           values: emptyValues,
           createdBy: email.toLowerCase(),
           createdAt: Date.now() + i
@@ -614,6 +747,20 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     }
   },
 
+  updateProjectVisibility: async (id: string, visibility: 'private' | 'public') => {
+    try {
+      const docRef = doc(db, 'workspaces', id);
+      
+      set(state => ({
+        projects: state.projects.map(p => p.id === id ? { ...p, visibility } : p)
+      }));
+
+      await updateDoc(docRef, { visibility });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
   updateTable: async (id: string, newName: string) => {
     try {
       const docRef = doc(db, 'tables', id);
@@ -673,27 +820,34 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       
       await updateDoc(doc(db, 'workspaces', projectId), {
         memberEmails: currentEmails.filter((e: string) => e !== emailLower),
-        [`members.${emailLower.replace(/\./g, '_')}`]: deleteField(),
-        [`clientPermissions.${emailLower.replace(/\./g, '_')}`]: deleteField()
+        [`members.${emailLower.replace(/\./g, '_')}`]: deleteField()
       });
     } catch (error: any) {
       console.error(error);
     }
   },
   
-  setClientPermissions: async (projectId: string, email: string, tableIds: string[]) => {
-    try {
-      const emailKey = email.toLowerCase().replace(/\./g, '_');
-      await updateDoc(doc(db, 'workspaces', projectId), {
-        [`clientPermissions.${emailKey}`]: tableIds
-      });
-    } catch (error: any) {
-      set({ error: error.message });
-    }
-  },
-
   deleteTable: async (tableId: string) => {
     try {
+      // 1. Seleccionar otra tabla ANTES de borrar para evitar pantalla en blanco
+      const { tables, activeProjectId, activeTableId } = get();
+      if (activeTableId === tableId) {
+        // Buscar otra tabla del mismo proyecto (excluyendo la que se va a borrar)
+        const siblings = tables.filter(t => t.projectId === activeProjectId && t.id !== tableId);
+        if (siblings.length > 0) {
+          // Seleccionar la más reciente disponible
+          const next = siblings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+          set({ activeTableId: next.id, columnDefinitions: next.columnDefinitions || [] });
+        } else {
+          // No hay más tablas — limpiar la vista
+          set({ activeTableId: '', records: [], columnDefinitions: [] });
+        }
+      }
+
+      // 2. Eliminar la tabla del estado local inmediatamente (UX instantáneo)
+      set(state => ({ tables: state.tables.filter(t => t.id !== tableId) }));
+
+      // 3. Borrar en Firestore en segundo plano
       await deleteDoc(doc(db, 'tables', tableId));
       const q = query(collection(db, 'campaigns'), where('tableId', '==', tableId));
       const snap = await getDocs(q);
@@ -733,5 +887,11 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     } catch (error: any) {
       set({ error: error.message });
     }
-  }
+  },
+  isAiOpen: false,
+  setIsAiOpen: (val: boolean) => set({ isAiOpen: val }),
+  aiWindowState: 'open',
+  setAiWindowState: (val: 'open' | 'minimized') => set({ aiWindowState: val }),
+  chatMessages: [],
+  setChatMessages: (msgs) => set({ chatMessages: msgs }),
 }));

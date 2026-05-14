@@ -1,68 +1,55 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // ==========================================
-    // REGLAS NATICBOX: ACCESO TOTAL POR UID
-    // ==========================================
-    
+
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // UID MAESTRO (admin@natic.com)
     function isMasterAdmin() {
-      return request.auth.uid == "RXH1eN22BtUAdJBrK4bPR3AxiO52";
-    }
-
-    // EL ADMINISTRADOR MAESTRO TIENE PASO LIBRE EN TODO EL SISTEMA
-    match /{document=**} {
-      allow read, write: if isAuthenticated() && isMasterAdmin();
-    }
-
-    // Reglas para el resto de los usuarios (Colaboradores y Clientes)
-    function getUserEmail() {
-      return request.auth.token.email.lower();
+      return isAuthenticated() && request.auth.uid == "RXH1eN22BtUAdJBrK4bPR3AxiO52";
     }
 
     function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isAuthenticated() && exists(userPath) && get(userPath).data.get('role', '') == 'admin';
     }
 
+    // ── Usuarios ──
+    // Solo admins pueden listar y modificar todos los usuarios.
+    // Un colaborador solo puede leer y actualizar su propio documento (ej. foto de perfil).
     match /users/{userId} {
-      // Un usuario solo puede leer su propio perfil. Los administradores pueden leer cualquiera.
-      allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin() || isMasterAdmin());
-      // Solo los administradores pueden listar todos los usuarios para proteger la privacidad.
-      allow list: if isAuthenticated() && (isAdmin() || isMasterAdmin());
-      // Un usuario solo puede editar su propio perfil. Los administradores pueden editar cualquiera.
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin() || isMasterAdmin());
+      allow read: if isAuthenticated() && (isAdmin() || isMasterAdmin() || request.auth.uid == userId);
+      allow write: if isAuthenticated() && (isAdmin() || isMasterAdmin() || request.auth.uid == userId);
     }
-    
+
+    // ── Workspaces / Proyectos ──
     match /workspaces/{workspaceId} {
-      // El ownerId debe ser el UID del usuario que crea el workspace.
-      // Los miembros deben ser añadidos explícitamente.
-      allow read, write: if isAuthenticated() && (getUserEmail() in resource.data.memberEmails || request.auth.uid == resource.data.ownerId);
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.ownerId;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        isMasterAdmin() ||
+        request.auth.uid == resource.data.get('ownerId', '') ||
+        request.auth.token.get('email', '').lower() in resource.data.get('memberEmails', [])
+      );
+      allow delete: if isAuthenticated() && (isAdmin() || isMasterAdmin() || request.auth.uid == resource.data.get('ownerId', ''));
     }
 
-    function isWorkspaceMember(workspaceId) {
-      return request.auth.uid == get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId || 
-             getUserEmail() in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.memberEmails;
-    }
-
+    // ── Tablas ──
     match /tables/{tableId} {
-      // REGLA SEGURA: Solo los miembros del workspace al que pertenece la tabla pueden acceder.
-      // Requiere que cada documento en 'tables' tenga un campo 'workspaceId'.
-      allow read, write: if isAuthenticated() && isWorkspaceMember(resource.data.workspaceId);
-      allow create: if isAuthenticated() && isWorkspaceMember(request.resource.data.workspaceId);
+      allow read: if isAuthenticated();
+      // Sin auth: solo tablas públicas de tipo 'requests' (formulario para clientes)
+      allow read: if !isAuthenticated() && resource.data.get('type', '') == 'requests';
+      allow write: if isAuthenticated();
     }
-    
+
+    // ── Registros (campaigns) ──
     match /campaigns/{docId} {
-      // Solo el dueño (o un admin) puede leer, actualizar o borrar. Asume un campo `ownerId`.
-      allow read, update, delete: if isAuthenticated() && (request.auth.uid == resource.data.ownerId || isMasterAdmin());
-      // REGLA SEGURA: Se elimina la creación pública. Solo usuarios autenticados pueden crear campañas
-      // y deben ser los propietarios. Las subidas públicas deben ser manejadas por un backend (Cloud Function).
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.ownerId;
+      allow read, write: if isAuthenticated();
+      // Formulario público sin login
+      allow create: if !isAuthenticated() &&
+        request.resource.data.get('source', '') == 'public_form';
     }
   }
 }

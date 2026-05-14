@@ -21,13 +21,12 @@ import MarketingHub from './pages/marketing/MarketingHub';
 import HomePage from './components/HomePage';
 import PublicFormView from './components/PublicFormView';
 import AIChat from './components/AIChat';
-import ClientPortal from './components/ClientPortal';
 import { useAuth } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
 import { auth } from './firebase';
 import { signOut } from 'firebase/auth';
 
-import { ChevronDown, X, MessageSquare } from 'lucide-react';
+import { ChevronDown, X, MessageSquare, Globe, Lock } from 'lucide-react';
 import { useCampaignStore, DEFAULT_COLUMNS_V2, DEFAULT_FORM_COLUMNS, type ColumnType } from './store/useCampaignStore';
 
 type MainTab = 'datos' | 'automatizaciones' | 'interfaces' | 'marketing';
@@ -90,6 +89,7 @@ export default function App() {
     aiLoadingText, setAiLoadingText,
     triggerAiSimulation,
     isSidebarCollapsed, setIsSidebarCollapsed,
+    isAiOpen, setIsAiOpen,
     loading: dataLoading 
   } = useCampaignStore();
   
@@ -203,11 +203,6 @@ export default function App() {
     return <Login />;
   }
 
-  // Redirect to Client Portal if user is a client
-  if (userData?.role === 'cliente') {
-    return <ClientPortal />;
-  }
-
   // Wait for Firebase to return initial data
   if (!appReady) {
     return <div className="h-screen w-screen flex items-center justify-center bg-[#030305]"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div></div>;
@@ -217,7 +212,7 @@ export default function App() {
     return (
       <>
         <TeamPage onBack={() => setShowTeamManagement(false)} user={user} userData={userData} activeProjectId={activeProjectId} isProMode={isProMode} onToggleProMode={handleProToggle} />
-        {isAiSimulating && <AISimulationOverlay />}
+
       </>
     );
   }
@@ -230,14 +225,9 @@ export default function App() {
     return (
       <>
         <AccountPage user={user} userData={userData} onBack={() => setShowAccountSettings(false)} isProMode={isProMode} onToggleProMode={handleProToggle} />
-        {isAiSimulating && <AISimulationOverlay />}
+
       </>
     );
-  }
-
-  // Redirect clients to their dedicated portal
-  if (userData?.role === 'cliente') {
-    return <ClientPortal user={user} />;
   }
 
   if (showHome) {
@@ -272,9 +262,9 @@ export default function App() {
         {isCreatingProject && (
           <CreateProjectModal 
             onClose={() => setIsCreatingProject(false)} 
-            onCreate={async (name, template, rows) => {
-              await addProject(name, template);
-              setIsCreatingProject(false);
+            onCreate={async (name, templateObj, rows) => {
+              const template = templateObj ? 'marketing' : 'general';
+              await addProject(name, template);              setIsCreatingProject(false);
               if (rows && rows.length > 0) {
                 const state = useCampaignStore.getState();
                 const newProjectId = state.activeProjectId;
@@ -303,11 +293,12 @@ export default function App() {
 
               if (rows && rows.length > 0) {
                 const state = useCampaignStore.getState();
-                const newTableId = state.activeTableId;                if (activeProjectId && newTableId) {
+                const newTableId = state.activeTableId;
+                if (activeProjectId && newTableId) {
                   await state.importRows(activeProjectId, newTableId, rows);
                 }
               }
-              setShowHome(false);
+              showToast(`Tabla "${name}" creada con éxito`, 'success');
             }}
           />
         )}
@@ -329,12 +320,13 @@ export default function App() {
     <div className={`flex flex-col h-screen font-sans overflow-hidden selection:bg-brand-500/30 transition-colors duration-500 ${isDarkMode ? 'bg-[#030305] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       
       {/* AI Agent Simulation Overlay */}
-      {isAiSimulating && <AISimulationOverlay />}
+      {/* isAiSimulating overlay removed */}
 
       {isCreatingProject && (
         <CreateProjectModal 
           onClose={() => setIsCreatingProject(false)} 
-          onCreate={async (name, template, rows) => {
+          onCreate={async (name, templateObj, rows) => {
+            const template = templateObj ? 'marketing' : 'general';
             await addProject(name, template);
             setIsCreatingProject(false);
             if (rows && rows.length > 0) {
@@ -437,11 +429,22 @@ export default function App() {
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
                               
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  useCampaignStore.getState().updateProjectVisibility(proj.id, proj.visibility === 'public' ? 'private' : 'public');
+                                }}
+                                className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md ${isDarkMode ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'} ${proj.visibility === 'public' ? 'text-green-500 hover:text-green-600' : ''}`}
+                                title={proj.visibility === 'public' ? 'Hacer Privado' : 'Hacer Público'}
+                              >
+                                {proj.visibility === 'public' ? <Globe className="w-3.5 h-3.5 text-green-500" /> : <Lock className="w-3.5 h-3.5" />}
+                              </button>
+
                               {!isActive && projects.length > 1 && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onDeleteProject({ id: proj.id, name: proj.name });
+                                    deleteProject(proj.id);
                                   }}
                                   className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-red-500/10 hover:text-red-500 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
                                   title="Eliminar espacio"
@@ -502,7 +505,22 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-3">
-
+          {userData?.role === 'admin' && (
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                Notificaciones
+              </span>
+              <button 
+                onClick={() => setIsAiOpen(!isAiOpen)}
+                className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
+              >
+                <motion.span 
+                  animate={{ x: isAiOpen ? 16 : 2 }}
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
+                />
+              </button>
+            </div>
+          )}
 
           <button 
             onClick={toggleDarkMode}
@@ -751,6 +769,9 @@ export default function App() {
           defaultValue={dialogConfig.defaultValue}
           confirmText={dialogConfig.confirmText}
         />
+
+        {/* AI Chat — Admin Only, Secret FAB */}
+        <AIChat userData={userData} user={user} />
 
       </main>
     </div>

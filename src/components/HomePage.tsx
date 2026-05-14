@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Grid3X3, List, Star, Clock, Users, LogOut, Sparkles, MoreHorizontal, Database, ArrowLeft, Table2, Trash2, Sun, Moon, ChevronRight, ChevronLeft, Info, X, Mail, Loader2 } from 'lucide-react';
+import { Plus, Search, Grid3X3, List, Star, Clock, Users, LogOut, Sparkles, MoreHorizontal, Database, ArrowLeft, Table2, Trash2, Sun, Moon, ChevronRight, ChevronLeft, Info, X, Mail, Loader2, Settings } from 'lucide-react';
 import { cn, hashColor, AVATAR_COLORS } from '../lib/utils';
 import { useCampaignStore, type Project, type Table } from '../store/useCampaignStore';
 import type { UserRole } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { UserMenu } from './UserMenu';
+import ProjectSettingsModal from './ProjectSettingsModal';
+import Dashboard from './Dashboard';
 
 interface HomePageProps {
   user: any;
@@ -56,6 +58,7 @@ export default function HomePage({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [openMenuTableId, setOpenMenuTableId] = useState<string | null>(null);
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
+  const [settingsProject, setSettingsProject] = useState<Project | null>(null);
   
   // double-click detection for tables
   const [clickTimers, setClickTimers] = useState<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -65,8 +68,11 @@ export default function HomePage({
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<UserRole>('colaborador');
   const [isMemberAdding, setIsMemberAdding] = useState(false);
-  
-  const { toggleFavoriteProject, isSidebarCollapsed, setIsSidebarCollapsed } = useCampaignStore();
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [inlineMemberEmail, setInlineMemberEmail] = useState('');
+  const [inlineAddingMember, setInlineAddingMember] = useState(false);
+
+  const { toggleFavoriteProject, isSidebarCollapsed, setIsSidebarCollapsed, setActiveProjectId, allUsers } = useCampaignStore();
 
   const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -125,6 +131,8 @@ export default function HomePage({
   const handleWorkspaceClick = (id: string) => {
     setSelectedProjectId(id);
     setActiveSidebarTab(null);
+    // Sync store so App.tsx effects (initializeProjectData) stay consistent
+    setActiveProjectId(id);
   };
 
   const handleTableClick = (projectId: string, tableId: string) => {
@@ -311,40 +319,23 @@ export default function HomePage({
             
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
-                <motion.div 
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={`flex items-center gap-3 px-3 py-1.5 rounded-full border transition-all relative overflow-hidden ${
-                    isProMode 
-                      ? (isDarkMode ? 'border-brand-500/50 bg-brand-500/10 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'border-brand-200 bg-brand-50 shadow-sm')
-                      : (isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm')
-                  }`}
-                >
-                  {isProMode && (
-                    <motion.div 
-                      layoutId="ai-glow-home"
-                      className="absolute inset-0 bg-gradient-to-r from-brand-500/20 to-pink-500/20 blur-md"
-                      animate={{ opacity: [0.3, 0.6, 0.3] }}
-                      transition={{ repeat: Infinity, duration: 2 }}
-                    />
-                  )}
-                  <div className="flex items-center gap-1.5 relative z-10">
-                    <Sparkles className={`w-3.5 h-3.5 transition-colors ${isProMode ? 'text-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`} />
-                    <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isProMode ? 'text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
-                      PRO IA
+                {userData?.role === 'admin' && (
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Notificaciones
                     </span>
+                    <button 
+                      onClick={() => useCampaignStore.getState().setIsAiOpen(!useCampaignStore.getState().isAiOpen)}
+                      className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${useCampaignStore.getState().isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
+                    >
+                      <motion.span 
+                        animate={{ x: useCampaignStore.getState().isAiOpen ? 16 : 2 }}
+                        className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
+                      />
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => onToggleProMode()}
-                    className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors z-10 ${isProMode ? 'bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
-                  >
-                    <motion.span 
-                      animate={{ x: isProMode ? 16 : 2 }}
-                      className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
-                    />
-                  </button>
-                </motion.div>
-                
+                )}
+
                 <button
                   onClick={toggleDarkMode}
                   className={`p-2 rounded-full transition-colors ${isDarkMode ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'}`}
@@ -375,13 +366,30 @@ export default function HomePage({
               </span>
             </div>
 
-            <button 
-              onClick={() => onCreateTable(selectedProject.id)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-brand-600/20 active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              Nueva tabla
-            </button>
+            <div className="flex items-center gap-2">
+
+              {userData?.role === 'admin' && (
+                <button
+                  onClick={() => setSettingsProject(selectedProject)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                    isDarkMode ? 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200'
+                  }`}
+                  title="Configurar proyecto"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  Ajustes
+                </button>
+              )}
+
+              <button 
+                onClick={() => onCreateTable(selectedProject.id)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-brand-600/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                Nueva tabla
+              </button>
+            </div>
+
           </div>
 
           <div className="flex-1 flex overflow-hidden relative">
@@ -502,7 +510,8 @@ export default function HomePage({
                     <ChevronRight className="w-4 h-4 group-hover:scale-125 transition-transform" />
                   </button>
 
-                  <div className="w-80 h-full overflow-y-auto p-6 space-y-8">
+                  <div className="w-80 h-full overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                    {/* Avatar + name */}
                     <div className="flex flex-col items-center text-center">
                       <div className={`w-20 h-20 rounded-[28%] flex items-center justify-center text-2xl font-black text-white mb-4 shadow-xl ring-4 ${isDarkMode ? 'ring-white/5' : 'ring-white'} ${hashColor(selectedProject.id, AVATAR_COLORS)}`}>
                         {initials(selectedProject.name)}
@@ -513,101 +522,126 @@ export default function HomePage({
 
                     <div className="h-px bg-white/5" />
 
+                    {/* Stats */}
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 mb-3">Estadísticas</p>
                       <div className="space-y-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-400 flex items-center gap-2">
-                            <Table2 className="w-3.5 h-3.5 text-slate-600" />
-                            Tablas
-                          </span>
+                          <span className="text-xs text-slate-400 flex items-center gap-2"><Table2 className="w-3.5 h-3.5 text-slate-600" />Tablas</span>
                           <span className="text-xs font-bold text-white">{projectTables.length}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-400 flex items-center gap-2">
-                            <Database className="w-3.5 h-3.5 text-slate-600" />
-                            Base de datos
-                          </span>
+                          <span className="text-xs text-slate-400 flex items-center gap-2"><Database className="w-3.5 h-3.5 text-slate-600" />Base de datos</span>
                           <span className="text-xs font-bold text-emerald-400">Activa</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="h-px bg-white/5" />
-
-                    <div className="space-y-6">
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">Colaboradores</p>
-                          <button 
-                            onClick={() => {
-                              setNewMemberRole('colaborador');
-                              setIsMemberModalOpen(true);
-                            }}
-                            className={`p-1.5 rounded-xl transition-all ${isDarkMode ? 'hover:bg-white/5 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
+                    {/* ── COLABORADORES ── */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
+                          Colaboradores <span className={`ml-1 font-normal normal-case tracking-normal ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>({selectedProject.memberEmails?.length || 0})</span>
+                        </p>
+                        {(userData?.role === 'admin' || (selectedProject as any).ownerId === user?.uid) && (
+                          <button
+                            onClick={() => setShowAddMember(v => !v)}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                              showAddMember
+                                ? 'bg-brand-500/20 text-brand-400 border border-brand-500/30'
+                                : isDarkMode ? 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10' : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-200'
+                            }`}
                           >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="w-3 h-3" />
+                            Agregar
                           </button>
-                        </div>
-                        <div className="space-y-4">
-                          {selectedProject.memberEmails?.filter(email => {
-                            const role = selectedProject.members?.[email.replace(/\./g, '_')];
-                            return role === 'owner' || role === 'admin' || role === 'colaborador' || !role;
-                          }).map((email: string) => {
-                            const isCurrentUser = email === user?.email?.toLowerCase();
-                            const role = selectedProject.members?.[email.replace(/\./g, '_')] || 'colaborador';
-                            
-                            return (
-                              <div key={email} className="flex items-center gap-3 group">
-                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0 shadow-lg ${hashColor(email, AVATAR_COLORS)}`}>
-                                  {email.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                    {isCurrentUser ? (userData?.displayName || 'Tú') : email}
-                                  </p>
-                                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                                    {role === 'owner' ? 'Propietario' : role === 'admin' ? 'Administrador' : 'Colaborador'}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                        )}
                       </div>
 
-                      <div className="h-px bg-white/5" />
-
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">Clientes</p>
-                          <button 
-                            onClick={() => {
-                              setNewMemberRole('cliente');
-                              setIsMemberModalOpen(true);
-                            }}
-                            className={`p-1.5 rounded-xl transition-all ${isDarkMode ? 'hover:bg-white/5 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                        <div className="space-y-4">
-                          {selectedProject.memberEmails?.filter(email => selectedProject.members?.[email.replace(/\./g, '_')] === 'cliente').map((email: string) => (
-                            <div key={email} className="flex items-center gap-3 group">
-                              <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center text-xs font-black text-white flex-shrink-0 shadow-lg shadow-emerald-500/20">
-                                {email.charAt(0).toUpperCase()}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{email}</p>
-                                <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">Cliente VIP</p>
-                              </div>
-                            </div>
-                          ))}
-                          
-                          {selectedProject.memberEmails?.filter(email => selectedProject.members?.[email.replace(/\./g, '_')] === 'cliente').length === 0 && (
-                            <p className="text-[10px] text-slate-500 italic px-1">No hay clientes asignados</p>
+                      {/* Inline add member */}
+                      {showAddMember && (userData?.role === 'admin' || (selectedProject as any).ownerId === user?.uid) && (
+                        <div className={`rounded-2xl border p-3 space-y-2 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Selecciona un usuario</p>
+                          <div className="flex gap-1.5">
+                            <select
+                              value={inlineMemberEmail}
+                              onChange={e => setInlineMemberEmail(e.target.value)}
+                              className={`flex-1 px-2.5 py-2 rounded-xl text-xs outline-none transition-all appearance-none min-w-0 ${
+                                isDarkMode ? 'bg-[#0f0f13] border border-white/10 text-white' : 'bg-white border border-slate-200 text-slate-900'
+                              }`}
+                            >
+                              <option value="">— Selecciona —</option>
+                              {allUsers
+                                .filter((u: any) => u.email && !selectedProject.memberEmails?.map((m: string) => m.toLowerCase()).includes(u.email.toLowerCase()))
+                                .map((u: any) => (
+                                  <option key={u.id || u.email} value={u.email}>
+                                    {u.displayName || u.email.split('@')[0]} · {u.email}
+                                  </option>
+                                ))
+                              }
+                            </select>
+                            <button
+                              disabled={!inlineMemberEmail || inlineAddingMember}
+                              onClick={async () => {
+                                if (!inlineMemberEmail) return;
+                                setInlineAddingMember(true);
+                                try {
+                                  await useCampaignStore.getState().addMemberToProject(selectedProject.id, inlineMemberEmail, 'colaborador');
+                                  setInlineMemberEmail('');
+                                  setShowAddMember(false);
+                                } catch(e) { console.error(e); }
+                                finally { setInlineAddingMember(false); }
+                              }}
+                              className="px-3 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-white text-xs font-bold transition-all disabled:opacity-40 flex-shrink-0"
+                            >
+                              {inlineAddingMember ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Agregar'}
+                            </button>
+                          </div>
+                          {allUsers.filter((u: any) => u.email && !selectedProject.memberEmails?.map((m: string) => m.toLowerCase()).includes(u.email.toLowerCase())).length === 0 && (
+                            <p className="text-[10px] text-slate-400 text-center py-1">Todos los usuarios ya son miembros</p>
                           )}
                         </div>
+                      )}
+
+                      {/* Member list */}
+                      <div className="space-y-2.5">
+                        {selectedProject.memberEmails?.map((email: string) => {
+                          const isCurrentUser = email === user?.email?.toLowerCase();
+                          const role = selectedProject.members?.[email.replace(/\./g, '_')] || 'colaborador';
+                          const userInfo = useCampaignStore.getState().allUsers.find((u: any) => u.email?.toLowerCase() === email.toLowerCase()) as any;
+                          const displayName = userInfo?.displayName || email.split('@')[0];
+
+                          return (
+                            <div key={email} className="flex items-center gap-3 group">
+                              {userInfo?.photoURL ? (
+                                <img src={userInfo.photoURL} alt="" className="w-8 h-8 rounded-xl object-cover flex-shrink-0 shadow-md" />
+                              ) : (
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0 shadow-md ${hashColor(email, AVATAR_COLORS)}`}>
+                                  {email.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                  {isCurrentUser ? (userData?.displayName || 'Tú') : displayName}
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                                  {role === 'owner' ? 'Propietario' : 'Colaborador'}
+                                </p>
+                              </div>
+                              {userData?.role === 'admin' && !isCurrentUser && (
+                                <button
+                                  onClick={async () => {
+                                    await useCampaignStore.getState().removeMemberFromProject(selectedProject.id, email);
+                                  }}
+                                  className={`opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-all flex-shrink-0`}
+                                  title="Quitar colaborador"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -655,18 +689,17 @@ export default function HomePage({
                   isDarkMode ? 'bg-[#1a1a23] border-white/10' : 'bg-white border-slate-200'
                 }`}
               >
-                {/* Modal Header Contextual */}
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${newMemberRole === 'cliente' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-brand-500/10 text-brand-500'}`}>
-                      {newMemberRole === 'cliente' ? <Sparkles className="w-5 h-5" /> : <Users className="w-5 h-5" />}
+                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center bg-brand-500/10 text-brand-500">
+                      <Users className="w-5 h-5" />
                     </div>
                     <div>
                       <h3 className={`text-lg font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        {newMemberRole === 'cliente' ? 'Invitar Cliente' : 'Invitar Colaborador'}
+                        Invitar Colaborador
                       </h3>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        {newMemberRole === 'cliente' ? 'Acceso exclusivo al portal' : 'Miembro del equipo de trabajo'}
+                        Miembro del equipo de trabajo
                       </p>
                     </div>
                   </div>
@@ -675,7 +708,6 @@ export default function HomePage({
                   </button>
                 </div>
 
-                {/* Form Contextual */}
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   if (!newMemberEmail.trim()) return;
@@ -709,94 +741,47 @@ export default function HomePage({
                   <button 
                     type="submit"
                     disabled={isMemberAdding || !newMemberEmail}
-                    className={`w-full py-4 rounded-2xl font-black text-sm shadow-xl transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${
-                      newMemberRole === 'cliente'
-                        ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'
-                        : 'bg-brand-600 hover:bg-brand-500 shadow-brand-600/20'
-                    }`}
+                    className="w-full py-4 rounded-2xl font-black text-sm shadow-xl transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-500 shadow-brand-600/20"
                   >
                     {isMemberAdding ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                    {newMemberRole === 'cliente' ? 'Agregar Cliente' : 'Agregar Colaborador'}
+                    Agregar Colaborador
                   </button>
                 </form>
-
-                {/* List Contextual (Solo muestra los del mismo rol) */}
                 <div className="max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4 px-1">
-                    {newMemberRole === 'cliente' ? 'Clientes Actuales' : 'Colaboradores Actuales'}
+                    Miembros Actuales
                   </p>
                   <div className="space-y-2">
-                    {selectedProject.memberEmails?.filter(email => {
-                      const role = selectedProject.members?.[email.replace(/\./g, '_')] || 'colaborador';
-                      if (newMemberRole === 'cliente') return role === 'cliente';
-                      return role !== 'cliente'; // Admins, owners y colaboradores entran aquí para el modal de equipo
-                    }).length === 0 ? (
-                      <p className="text-[10px] text-slate-600 italic px-1">No hay {newMemberRole === 'cliente' ? 'clientes' : 'colaboradores'} todavía.</p>
+                    {selectedProject.memberEmails?.length === 0 ? (
+                      <p className="text-[10px] text-slate-600 italic px-1">No hay miembros todavía.</p>
                     ) : (
-                      selectedProject.memberEmails?.filter(email => {
+                      selectedProject.memberEmails?.map(email => {
                         const role = selectedProject.members?.[email.replace(/\./g, '_')] || 'colaborador';
-                        if (newMemberRole === 'cliente') return role === 'cliente';
-                        return role !== 'cliente';
-                      }).map(email => {
-                        const role = selectedProject.members?.[email.replace(/\./g, '_')] || 'colaborador';
-                        const emailKey = email.replace(/\./g, '_');
-                        const allowedTables = selectedProject.clientPermissions?.[emailKey] || [];
                         
                         return (
-                          <div key={email} className={`flex flex-col p-4 rounded-2xl border transition-all group gap-3 ${
-                            newMemberRole === 'cliente' ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-white/5 border-white/5'
-                          }`}>
-                            <div className="flex items-center justify-between w-full">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white ${newMemberRole === 'cliente' ? 'bg-emerald-500' : hashColor(email, AVATAR_COLORS)}`}>
-                                  {email[0].toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold text-white truncate">{email === user?.email?.toLowerCase() ? 'Tú' : email}</p>
-                                  <p className={`text-[9px] uppercase font-black tracking-widest ${newMemberRole === 'cliente' ? 'text-emerald-500' : 'text-slate-500'}`}>
-                                    {role === 'owner' ? 'Propietario' : role === 'admin' ? 'Admin' : role}
-                                  </p>
-                                </div>
+                          <div key={email} className="flex items-center justify-between w-full p-4 rounded-2xl border bg-white/5 border-white/5 group">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white ${hashColor(email, AVATAR_COLORS)}`}>
+                                {email[0].toUpperCase()}
                               </div>
-                              {email !== user?.email?.toLowerCase() && (
-                                <button 
-                                  onClick={async () => {
-                                    if (window.confirm(`¿Remover a ${email}?`)) {
-                                      await useCampaignStore.getState().removeMemberFromProject(selectedProject.id, email);
-                                    }
-                                  }}
-                                  className="p-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-white truncate">{email === user?.email?.toLowerCase() ? 'Tú' : email}</p>
+                                <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">
+                                  {role === 'owner' ? 'Propietario' : role === 'admin' ? 'Admin' : 'Colaborador'}
+                                </p>
+                              </div>
                             </div>
-
-                            {/* Si es cliente, mostrar los permisos granulares de tablas dentro del modal también */}
-                            {role === 'cliente' && (
-                              <div className="pt-2 border-t border-white/5">
-                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Tablas permitidas:</p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {projectTables.map(t => (
-                                    <button
-                                      key={t.id}
-                                      onClick={() => {
-                                        const newPerms = allowedTables.includes(t.id)
-                                          ? allowedTables.filter(id => id !== t.id)
-                                          : [...allowedTables, t.id];
-                                        useCampaignStore.getState().setClientPermissions(selectedProject.id, email, newPerms);
-                                      }}
-                                      className={`px-2 py-1 rounded-lg text-[8px] font-bold transition-all border ${
-                                        allowedTables.includes(t.id)
-                                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                                          : 'bg-white/5 border-white/5 text-slate-500 hover:border-white/10'
-                                      }`}
-                                    >
-                                      {t.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
+                            {email !== user?.email?.toLowerCase() && (
+                              <button 
+                                onClick={async () => {
+                                  if (window.confirm(`¿Remover a ${email}?`)) {
+                                    await useCampaignStore.getState().removeMemberFromProject(selectedProject.id, email);
+                                  }
+                                }}
+                                className="p-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
                         );
@@ -964,99 +949,7 @@ export default function HomePage({
 
         <main className="flex-1 overflow-y-auto p-6 bg-transparent">
           {activeSidebarTab === 'Inicio' && !searchQuery ? (
-            <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-                <div className="flex items-center gap-4">
-                  {userData?.photoURL ? (
-                    <img src={userData.photoURL} alt={userData.displayName || 'User'} className={`w-16 h-16 rounded-2xl object-cover shadow-xl ring-4 ${isDarkMode ? 'ring-white/5' : 'ring-slate-100'}`} />
-                  ) : (
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold text-white shadow-xl ${hashColor(user?.email || 'A', AVATAR_COLORS)}`}>
-                       {initials(userData?.displayName || user?.email || 'U')}
-                    </div>
-                  )}
-                  <div>
-                    <h1 className="text-2xl font-bold text-white mb-1">Hola, {userData?.displayName?.split(' ')[0] || user?.email?.split('@')[0]} 👋</h1>
-                    <p className="text-sm text-slate-400">Aquí tienes el resumen de tu equipo hoy.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
-                {[
-                  { label: 'Espacios', value: projects.length, icon: Grid3X3, color: 'text-violet-500', bg: 'bg-violet-500/10' },
-                  { label: 'Tablas', value: tables.length, icon: Table2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-                  { label: 'Favoritos', value: projects.filter(p => p.favoriteBy?.includes(user?.email?.toLowerCase())).length, icon: Star, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-                  { label: 'Miembros', value: 'Gestión', icon: Users, color: 'text-emerald-500', bg: 'bg-emerald-500/10', onClick: onManageTeam }
-                ].map((stat, i) => (
-                  <div key={i} onClick={stat.onClick} className={`p-6 card-standard ${isDarkMode ? 'card-dark' : 'card-light'} ${stat.onClick ? 'cursor-pointer' : ''}`}>
-                    <div className="flex items-center gap-5">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${stat.bg} shadow-sm`}>
-                        <stat.icon className={`w-7 h-7 ${stat.color}`} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{stat.label}</p>
-                        <p className={`text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'} leading-none`}>{stat.value}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-4">
-                  <h2 className="text-sm font-semibold text-white flex items-center gap-2 mb-4">
-                    <Clock className="w-4 h-4 text-violet-400" />
-                    Espacios Recientes
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {projects.slice(0, 4).map(proj => (
-                      <div
-                        key={proj.id}
-                        onClick={() => handleWorkspaceClick(proj.id)}
-                        className={`group flex items-center gap-4 p-4 card-standard ${isDarkMode ? 'card-dark' : 'card-light'} cursor-pointer`}
-                      >
-                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xs font-extrabold text-white flex-shrink-0 shadow-lg ${hashColor(proj.id, AVATAR_COLORS)}`}>
-                          {initials(proj.name)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className={`text-sm font-bold truncate group-hover:text-brand-500 transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{proj.name}</h3>
-                          <p className="text-[10px] text-slate-500 mt-1 font-medium">{timeAgo(proj.createdAt)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h2 className="text-sm font-semibold text-white flex items-center gap-2 mb-4">
-                    <Table2 className="w-4 h-4 text-blue-400" />
-                    Últimas Tablas
-                  </h2>
-                  <div className="space-y-3">
-                    {tables.slice(0, 5).map(table => {
-                      const proj = projects.find(p => p.id === table.projectId);
-                      return (
-                        <div
-                          key={table.id}
-                          onClick={() => onOpenTable(table.projectId, table.id)}
-                          className={`flex items-center justify-between p-4 card-standard ${isDarkMode ? 'card-dark' : 'card-light'} cursor-pointer group`}
-                        >
-                          <div className="flex items-center gap-4 min-w-0">
-                            <div className={`w-9 h-9 rounded-xl bg-brand-500/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform shadow-sm`}>
-                              <Database className="w-4 h-4 text-brand-500" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{table.name}</p>
-                              <p className="text-[10px] text-slate-500 truncate mt-0.5 font-medium">{proj?.name || 'Desconocido'}</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <Dashboard />
           ) : (
             <>
               <div className="flex items-center justify-between mb-6">
@@ -1335,6 +1228,18 @@ export default function HomePage({
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Project Settings Modal */}
+      <AnimatePresence>
+        {settingsProject && (
+          <ProjectSettingsModal
+            project={settingsProject}
+            currentUser={user}
+            userData={userData}
+            onClose={() => setSettingsProject(null)}
+          />
         )}
       </AnimatePresence>
     </div>

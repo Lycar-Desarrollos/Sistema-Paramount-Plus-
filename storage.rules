@@ -1,0 +1,52 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // =============================================
+    // NATICBOX STORAGE RULES
+    // =============================================
+
+    // El administrador maestro tiene acceso total
+    function isMasterAdmin() {
+      return request.auth != null && request.auth.uid == "RXH1eN22BtUAdJBrK4bPR3AxiO52";
+    }
+
+    // Usuarios autenticados
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Archivos adjuntos internos (subidos por usuarios autenticados en el GridEngine)
+    match /attachments/{recordId}/{fileName} {
+      allow read: if isAuthenticated() || true;  // Lectura pública para ver en la tabla
+      allow write: if isAuthenticated();          // Escritura solo autenticados
+      allow delete: if isAuthenticated();
+    }
+
+    // Subidas desde formularios públicos (sin autenticación)
+    // Solo se permiten imágenes y documentos comunes
+    match /public_uploads/{tableId}/{fileName} {
+      allow read: if true;  // Lectura pública para mostrar en tabla
+      allow write: if
+        request.resource.size < 20 * 1024 * 1024 &&  // Máx 20MB
+        (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType.matches('application/pdf') ||
+          request.resource.contentType.matches('video/.*')
+        );
+      allow delete: if isAuthenticated();
+    }
+
+    // Fotos de perfil de usuarios
+    match /profile_photos/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Acceso total para el admin maestro en todo
+    match /{allPaths=**} {
+      allow read, write: if isMasterAdmin();
+    }
+  }
+}

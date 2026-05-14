@@ -1,96 +1,144 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
-import { Loader2, CheckCircle2, Upload, FileText, Send } from 'lucide-react';
+import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { uploadToCloudinary } from '../services/cloudinary';
+import { Loader2, CheckCircle2, Upload, FileText, Send, X, Image, File as FileIcon, AlertCircle } from 'lucide-react';
 import type { ColumnDefinition } from '../store/useCampaignStore';
+
+// ── Per-field file state ──────────────────────────────────────────────────
+interface FileEntry {
+  file: File;
+  preview?: string; // object URL for images
+}
 
 export default function PublicFormView() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [tableDef, setTableDef] = useState<any>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
-  const [files, setFiles] = useState<Record<string, File>>({});
+  // Multiple files per attachment column
+  const [files, setFiles] = useState<Record<string, FileEntry[]>>({});
 
   useEffect(() => {
     const fetchTable = async () => {
       try {
         const pathParts = window.location.pathname.split('/');
         const tableId = pathParts[pathParts.length - 1];
-        
-        if (!tableId) {
-          setError("URL inválida");
-          setLoading(false);
-          return;
-        }
+        if (!tableId) { setError('URL inválida'); setLoading(false); return; }
 
         const tableDoc = await getDoc(doc(db, 'tables', tableId));
         if (tableDoc.exists()) {
           setTableDef({ id: tableDoc.id, ...tableDoc.data() });
         } else {
-          setError("Formulario no encontrado");
+          setError('Formulario no encontrado');
         }
       } catch (err: any) {
-        console.error("Error loading form:", err);
-        setError("Error al cargar el formulario");
+        console.error('Error loading form:', err);
+        setError('Error al cargar el formulario. Verifica el enlace.');
       } finally {
         setLoading(false);
       }
     };
-
     fetchTable();
   }, []);
 
-  const handleFileChange = (colId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFiles(prev => ({ ...prev, [colId]: e.target.files![0] }));
-    }
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(files).flat().forEach(f => {
+        if (f.preview) URL.revokeObjectURL(f.preview);
+      });
+    };
+  }, [files]);
+
+  const handleFileAdd = (colId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files || []);
+    if (!selected.length) return;
+
+    const entries: FileEntry[] = selected.map(file => ({
+      file,
+      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+    }));
+
+    setFiles(prev => ({ ...prev, [colId]: [...(prev[colId] || []), ...entries] }));
+    e.target.value = ''; // reset so same file can be re-added if needed
+  };
+
+  const handleFileRemove = (colId: string, idx: number) => {
+    setFiles(prev => {
+      const updated = [...(prev[colId] || [])];
+      if (updated[idx]?.preview) URL.revokeObjectURL(updated[idx].preview!);
+      updated.splice(idx, 1);
+      return { ...prev, [colId]: updated };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+    setUploadProgress('');
 
     try {
       const finalData = { ...formData };
 
-      // 1. Upload files
-      for (const [colId, file] of Object.entries(files)) {
-        const fileRef = ref(storage, `public_uploads/${tableDef.id}/${Date.now()}_${file.name}`);
-        await uploadBytes(fileRef, file);
-        const url = await getDownloadURL(fileRef);
-        finalData[colId] = [{
-          name: file.name,
-          url,
-          type: file.type,
-          size: file.size,
-          storagePath: fileRef.fullPath
-        }];
+      // Upload all attachment files to Cloudinary
+      const attachmentCols = Object.entries(files).filter(([, entries]) => entries.length > 0);
+      if (attachmentCols.length > 0) {
+        for (const [colId, entries] of attachmentCols) {
+          const uploaded: any[] = [];
+          for (let i = 0; i < entries.length; i++) {
+            const { file } = entries[i];
+            setUploadProgress(`Subiendo archivo ${i + 1} de ${entries.length}...`);
+            const result = await uploadToCloudinary(file, `naticbox/public_forms/${tableDef.id}`);
+            uploaded.push({
+              name: result.name,
+              url: result.url,
+              type: result.type,
+              size: result.size,
+              publicId: result.publicId,
+            });
+          }
+          finalData[colId] = uploaded;
+        }
       }
+      setUploadProgress('Guardando respuestas...');
 
-      // 2. Save record
       await addDoc(collection(db, 'campaigns'), {
         tableId: tableDef.id,
+        workspaceId: tableDef.projectId,
         projectId: tableDef.projectId,
         values: finalData,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        source: 'public_form'
+        source: 'public_form',
+        submittedAt: new Date().toISOString(),
       });
 
       setSuccess(true);
     } catch (err: any) {
-      console.error("Submission error:", err);
-      setError("Ocurrió un error al enviar el formulario. Por favor, intenta de nuevo.");
+      console.error('Submission error:', err);
+      const msg = err?.message || '';
+      if (msg.includes('permission') || msg.includes('PERMISSION_DENIED')) {
+        setError('Error de permisos. Contacta al administrador.');
+      } else if (msg.includes('preset') || msg.includes('upload_preset')) {
+        setError('Error al subir archivos: el preset de Cloudinary no está configurado. Contacta al administrador.');
+      } else {
+        setError(msg || 'Error al enviar. Intenta de nuevo.');
+      }
     } finally {
       setSubmitting(false);
+      setUploadProgress('');
     }
   };
 
+  const inputCls = 'w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-medium focus:border-brand-500 focus:bg-white transition-all outline-none';
+
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -99,7 +147,8 @@ export default function PublicFormView() {
     );
   }
 
-  if (error) {
+  // ── Error (fatal) ────────────────────────────────────────────────────────
+  if (error && !tableDef) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center border border-slate-100">
@@ -113,10 +162,11 @@ export default function PublicFormView() {
     );
   }
 
+  // ── Success ──────────────────────────────────────────────────────────────
   if (success) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white p-12 rounded-3xl shadow-xl max-w-md w-full text-center border border-slate-100 animate-in zoom-in duration-500">
+        <div className="bg-white p-12 rounded-3xl shadow-xl max-w-md w-full text-center border border-slate-100">
           <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-10 h-10 text-emerald-500" />
           </div>
@@ -127,9 +177,12 @@ export default function PublicFormView() {
     );
   }
 
+  // ── Form ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col py-12 px-4 sm:px-6">
       <div className="max-w-2xl w-full mx-auto">
+
+        {/* Header */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-600 shadow-xl shadow-brand-500/30 mb-6">
             <FileText className="w-8 h-8 text-white" />
@@ -138,77 +191,157 @@ export default function PublicFormView() {
           <p className="text-slate-500 mt-2 font-medium">Por favor, completa la siguiente información</p>
         </div>
 
+        {/* Submission error */}
+        {error && (
+          <div className="mb-6 flex items-start gap-3 px-5 py-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700 font-medium">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <p>{error}</p>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 sm:p-10 space-y-8">
           {(tableDef?.columnDefinitions || []).map((col: ColumnDefinition) => {
-            if (col.type === 'user' || col.type === 'link') return null; // Skip system columns
+            if (col.type === 'user' || col.type === 'link') return null;
 
             return (
-              <div key={col.id} className="space-y-3">
+              <div key={col.id} className="space-y-2">
                 <label className="block text-sm font-bold text-slate-900">
                   {col.name}
+                  {col.type !== 'attachment' && <span className="text-red-500 ml-0.5">*</span>}
                 </label>
 
+                {/* TEXT */}
                 {col.type === 'text' && (
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-medium focus:border-brand-500 focus:bg-white transition-all outline-none"
+                  <input type="text" required className={inputCls}
                     placeholder={`Ingresa ${col.name.toLowerCase()}...`}
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
                   />
                 )}
 
+                {/* NUMBER */}
                 {col.type === 'number' && (
-                  <input
-                    type="number"
-                    required
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-medium focus:border-brand-500 focus:bg-white transition-all outline-none"
+                  <input type="number" required className={inputCls}
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: Number(e.target.value) })}
                   />
                 )}
 
+                {/* SELECT */}
                 {col.type === 'select' && (
-                  <select
-                    required
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-medium focus:border-brand-500 focus:bg-white transition-all outline-none appearance-none"
+                  <select required className={`${inputCls} appearance-none`}
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
                   >
                     <option value="" disabled>Selecciona una opción</option>
-                    {(col.config?.options || []).map(opt => (
+                    {(col.config?.options || []).map((opt: any) => (
                       <option key={opt.label} value={opt.label}>{opt.label}</option>
                     ))}
                   </select>
                 )}
 
+                {/* DATE */}
+                {col.type === 'date' && (
+                  <input type="date" required className={inputCls}
+                    value={formData[col.id] || ''}
+                    onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
+                  />
+                )}
+
+                {/* PHONE */}
+                {col.type === 'phone' && (
+                  <input type="tel" required className={inputCls}
+                    placeholder="Ej: +52 55 1234 5678"
+                    value={formData[col.id] || ''}
+                    onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
+                  />
+                )}
+
+                {/* EMAIL */}
+                {col.type === 'email' && (
+                  <input type="email" required className={inputCls}
+                    placeholder="correo@ejemplo.com"
+                    value={formData[col.id] || ''}
+                    onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
+                  />
+                )}
+
+                {/* ATTACHMENT — supports multiple files, image preview */}
                 {col.type === 'attachment' && (
-                  <div className="relative group cursor-pointer">
-                    <input
-                      type="file"
-                      required
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      onChange={e => handleFileChange(col.id, e)}
-                    />
-                    <div className="w-full p-8 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 group-hover:border-brand-500 group-hover:bg-brand-50 transition-all text-center">
-                      <Upload className="w-8 h-8 text-slate-400 group-hover:text-brand-500 mx-auto mb-3" />
-                      <p className="text-sm font-bold text-slate-700">
-                        {files[col.id] ? files[col.id].name : 'Haz clic para subir un archivo'}
+                  <div className="space-y-3">
+                    {/* Drop zone */}
+                    <label className="relative flex flex-col items-center justify-center w-full p-6 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:border-brand-500 hover:bg-brand-50 transition-all cursor-pointer group">
+                      <Upload className="w-7 h-7 text-slate-400 group-hover:text-brand-500 mb-2 transition-colors" />
+                      <p className="text-sm font-bold text-slate-700 group-hover:text-brand-600">
+                        Haz clic para subir archivos
                       </p>
-                      <p className="text-xs text-slate-500 mt-1">Imágenes, videos o documentos</p>
-                    </div>
+                      <p className="text-xs text-slate-400 mt-1">Imágenes, videos, documentos · Opcional</p>
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        onChange={e => handleFileAdd(col.id, e)}
+                      />
+                    </label>
+
+                    {/* Preview list */}
+                    {(files[col.id] || []).length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {(files[col.id] || []).map((entry, idx) => (
+                          <div key={idx} className="relative group/file rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                            {entry.preview ? (
+                              <img src={entry.preview} alt={entry.file.name}
+                                className="w-full h-24 object-cover" />
+                            ) : (
+                              <div className="w-full h-24 flex flex-col items-center justify-center gap-1">
+                                {entry.file.type.includes('pdf') ? (
+                                  <FileText className="w-8 h-8 text-red-400" />
+                                ) : (
+                                  <FileIcon className="w-8 h-8 text-slate-400" />
+                                )}
+                                <p className="text-[10px] text-slate-500 font-medium px-2 text-center truncate w-full">
+                                  {entry.file.name}
+                                </p>
+                              </div>
+                            )}
+                            {/* Remove */}
+                            <button
+                              type="button"
+                              onClick={() => handleFileRemove(col.id, idx)}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/file:opacity-100 transition-opacity shadow"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                            {/* File name overlay for images */}
+                            {entry.preview && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/40 px-2 py-1">
+                                <p className="text-[10px] text-white truncate">{entry.file.name}</p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
+
               </div>
             );
           })}
 
-          <div className="pt-6">
+          {/* Submit */}
+          <div className="pt-4">
+            {uploadProgress && (
+              <div className="mb-4 flex items-center gap-2 text-sm text-brand-600 font-medium">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {uploadProgress}
+              </div>
+            )}
             <button
               type="submit"
               disabled={submitting}
-              className="w-full flex items-center justify-center gap-3 px-8 py-5 bg-brand-600 hover:bg-brand-500 text-white rounded-2xl font-black text-lg transition-all shadow-xl shadow-brand-600/20 active:scale-95 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-3 px-8 py-5 bg-brand-600 hover:bg-brand-500 text-white rounded-2xl font-black text-lg transition-all shadow-xl shadow-brand-600/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <Loader2 className="w-6 h-6 animate-spin" />

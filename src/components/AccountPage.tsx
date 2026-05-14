@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useCampaignStore } from '../store/useCampaignStore';
 import { Sparkles } from 'lucide-react';
 import { useToast } from './Toast';
+import { uploadToCloudinary, getCloudinaryThumbnail } from '../services/cloudinary';
 
 interface Props {
   user: any;
@@ -46,43 +47,10 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
     try {
       let finalPhotoUrl = previewUrl;
 
-      // Upload new photo if selected
+      // Upload new photo to Cloudinary using unsigned preset
       if (photoFile) {
-        const timestamp = Math.round((new Date).getTime()/1000);
-        const apiSecret = import.meta.env.VITE_CLOUDINARY_API_SECRET || "b3GNz3bXIEZZWnTXkEiNwIFMTao";
-        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "doylm03ih";
-        const apiKey = import.meta.env.VITE_CLOUDINARY_API_KEY || "838234118983858";
-
-        if (!apiSecret || !cloudName || !apiKey) {
-          throw new Error("Faltan las credenciales de Cloudinary en el archivo .env");
-        }
-
-        const strToSign = `timestamp=${timestamp}${apiSecret}`;
-
-        const encoder = new TextEncoder();
-        const data = encoder.encode(strToSign);
-        const hashBuffer = await crypto.subtle.digest('SHA-1', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const signature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-        const formData = new FormData();
-        formData.append("file", photoFile);
-        formData.append("api_key", apiKey);
-        formData.append("timestamp", timestamp.toString());
-        formData.append("signature", signature);
-
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-          method: "POST",
-          body: formData
-        });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Error de Cloudinary: ${errText}`);
-        }
-        
-        const json = await res.json();
-        finalPhotoUrl = json.secure_url;
+        const result = await uploadToCloudinary(photoFile, `naticbox/profile_photos/${user.uid}`);
+        finalPhotoUrl = getCloudinaryThumbnail(result.url, 400, 400);
       }
 
       // Update Firestore user document using setDoc with merge to support legacy users

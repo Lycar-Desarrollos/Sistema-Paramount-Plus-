@@ -121,7 +121,7 @@ export default function CreateTableModal({ onClose, onCreate }: Props) {
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={mode === 'form' ? "Ej: Solicitudes de Clientes" : "Ej: Seguimiento de Leads"}
+              placeholder={mode === 'form' ? "Ej: Solicitudes Externas" : "Ej: Seguimiento de Leads"}
               className={`w-full px-5 py-4 rounded-2xl border-2 outline-none transition-all text-base font-medium ${
                 isDarkMode 
                   ? 'bg-white/5 border-white/5 focus:border-brand-500 text-white' 
@@ -234,7 +234,7 @@ export default function CreateTableModal({ onClose, onCreate }: Props) {
                 <div>
                   <h4 className={`text-xs font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}>Modo Formulario</h4>
                   <p className={`text-[11px] mt-1 ${isDarkMode ? 'text-emerald-200' : 'text-emerald-600/80'}`}>
-                    Crea una tabla con un enlace público. Las columnas que configures serán las preguntas que el cliente deba responder. Podrán subir archivos y todo llegará a esta tabla.
+                    Crea una tabla con un enlace público. Las columnas que configures serán las preguntas que el usuario deba responder. Podrán subir archivos y todo llegará a esta tabla.
                   </p>
                 </div>
               </div>
