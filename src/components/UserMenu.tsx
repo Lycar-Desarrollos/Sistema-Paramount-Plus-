@@ -49,7 +49,9 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, onManageTeam
 
   const menuItems = [
     { icon: User, label: 'Cuenta', section: 'personal', onClick: onManageAccount, hasArrow: true },
-    ...(userData?.role === 'admin' ? [{ icon: Users, label: 'Gestionar equipo', badge: 'Business', section: 'personal', onClick: onManageTeam, hasArrow: true }] : []),
+    ...(userData?.role === 'admin' || user?.email === 'admin@natic.com' ? [{ icon: Users, label: 'Gestión de Usuarios y Equipo', badge: 'Empresa', section: 'personal', onClick: onManageTeam, hasArrow: true }] : []),
+    { icon: Bell, label: 'Preferencias de notificación', section: 'personal', hasArrow: true },
+    { icon: Languages, label: 'Preferencias de idioma', section: 'personal', hasArrow: true },
     { icon: Palette, label: 'Aspecto', badge: 'Beta', section: 'personal', hasArrow: true },
     
     { icon: MessageCircle, label: 'Comunicarse con Ventas', section: 'action', hasArrow: true },
@@ -61,14 +63,29 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, onManageTeam
   return (
     <div className="relative" ref={menuRef}>
       <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 group transition-all"
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className={`flex items-center gap-3 group transition-all p-1.5 rounded-2xl ${
+          isOpen 
+            ? (isDarkMode ? 'bg-white/10 shadow-lg' : 'bg-slate-100 shadow-inner') 
+            : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100/50')
+        }`}
       >
-        <div className="flex items-center gap-2 pl-2 border-l border-white/10">
+        <div className="text-right hidden sm:block pl-2">
+          <p className={`text-xs font-bold leading-none transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+            {userData?.displayName || user?.displayName || user?.email?.split('@')[0]}
+          </p>
+          <p className="text-[10px] text-slate-500 font-medium mt-1">Mi Cuenta</p>
+        </div>
+        <div className="flex items-center">
           {userData?.photoURL ? (
-            <img src={userData.photoURL} alt={user.displayName || 'User'} className="w-9 h-9 rounded-full object-cover border-2 border-white/10 shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform cursor-pointer" />
+            <img src={userData.photoURL} alt={user.displayName || 'User'} className="w-9 h-9 rounded-xl object-cover border-2 border-white/10 shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform cursor-pointer" />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-pink-500 text-white flex items-center justify-center text-sm font-bold border-2 border-white/10 shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform cursor-pointer">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-pink-500 text-white flex items-center justify-center text-xs font-black border-2 border-white/10 shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform cursor-pointer">
               {(userData?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U').toUpperCase()}
             </div>
           )}
@@ -81,7 +98,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, userData, onManageTeam
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className={`absolute right-0 mt-3 w-72 rounded-2xl shadow-2xl overflow-hidden z-[100] border ${
+            className={`absolute right-0 mt-3 w-72 rounded-2xl shadow-2xl overflow-hidden z-[999] border ${
               isDarkMode 
                 ? 'bg-[#13131a]/95 backdrop-blur-xl border-white/10' 
                 : 'bg-white/95 backdrop-blur-xl border-slate-200'

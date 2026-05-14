@@ -121,36 +121,40 @@ export default function MarketingDashboard({ isDarkMode = true }: { isDarkMode?:
       </div>
 
       {/* Charts & Activity Placeholder */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className={`lg:col-span-2 p-8 rounded-[32px] border ${
-          isDarkMode ? 'bg-slate-900/50 border-white/5' : 'bg-white border-slate-200'
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
+        <div className={`lg:col-span-2 p-8 card-standard ${
+          isDarkMode ? 'card-dark' : 'card-light'
         }`}>
           <div className="flex justify-between items-center mb-8">
-            <h3 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Rendimiento de Inversión</h3>
-            <div className={`p-1 rounded-lg flex ${isDarkMode ? 'bg-black/20' : 'bg-slate-100'}`}>
-               <button className="px-3 py-1 text-xs font-bold bg-brand-500 text-white rounded-md">Mes</button>
-               <button className={`px-3 py-1 text-xs font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Año</button>
+            <h3 className={`text-xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Rendimiento de Inversión</h3>
+            <div className={`p-1 rounded-xl flex ${isDarkMode ? 'bg-black/20' : 'bg-slate-100'}`}>
+               <button className="px-4 py-1.5 text-xs font-bold bg-brand-600 text-white rounded-lg shadow-md shadow-brand-600/20 transition-all">Mes</button>
+               <button className={`px-4 py-1.5 text-xs font-bold transition-all ${isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}>Año</button>
             </div>
           </div>
-          <div className={`h-[300px] flex items-center justify-center border-2 border-dashed rounded-2xl ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
-             <BarChart3 className={`w-12 h-12 ${isDarkMode ? 'text-slate-800' : 'text-slate-300'}`} />
-             <p className={`${isDarkMode ? 'text-slate-500' : 'text-slate-400'} font-medium ml-4`}>Motor de Gráficos Recharts en construcción...</p>
+          <div className={`h-[350px] flex items-center justify-center border-2 border-dashed rounded-2xl ${isDarkMode ? 'border-white/5 bg-white/[0.01]' : 'border-slate-100 bg-slate-50/50'}`}>
+             <div className="flex flex-col items-center gap-4">
+               <div className={`p-4 rounded-full ${isDarkMode ? 'bg-white/5' : 'bg-white shadow-sm'}`}>
+                 <BarChart3 className={`w-10 h-10 ${isDarkMode ? 'text-brand-500' : 'text-brand-400'}`} />
+               </div>
+               <p className={`${isDarkMode ? 'text-slate-500' : 'text-slate-400'} font-bold text-sm tracking-tight`}>Motor de Gráficos Recharts en construcción...</p>
+             </div>
           </div>
         </div>
 
-        <div className={`p-8 rounded-[32px] border ${
-          isDarkMode ? 'bg-slate-900/50 border-white/5' : 'bg-white border-slate-200'
+        <div className={`p-8 card-standard ${
+          isDarkMode ? 'card-dark' : 'card-light'
         }`}>
-          <h3 className={`text-xl font-bold mb-6 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Actividad Reciente</h3>
-          <div className="space-y-6">
+          <h3 className={`text-xl font-black mb-8 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Actividad Reciente</h3>
+          <div className="space-y-8">
             {[1,2,3,4].map(i => (
-              <div key={i} className="flex gap-4 items-start">
-                <div className="w-2 h-2 mt-2 rounded-full bg-brand-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>
+              <div key={i} className="flex gap-4 items-start group">
+                <div className="w-2.5 h-2.5 mt-1.5 rounded-full bg-brand-500 shadow-[0_0_15px_rgba(139,92,246,0.6)] group-hover:scale-125 transition-transform"></div>
                 <div>
-                  <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                    Nueva pieza de contenido aprobada para <span className="text-brand-400">Summer Sale</span>
+                  <p className={`text-sm font-bold leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    Nueva pieza de contenido aprobada para <span className="text-brand-500">Summer Sale</span>
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-1">Hace 15 minutos</p>
+                  <p className="text-[10px] font-bold text-slate-500 mt-2 uppercase tracking-wider">Hace 15 minutos</p>
                 </div>
               </div>
             ))}

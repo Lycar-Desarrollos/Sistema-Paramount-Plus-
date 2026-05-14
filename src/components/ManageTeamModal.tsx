@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Shield, User, UserPlus, Trash2, Mail } from 'lucide-react';
-import { collection, query, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, deleteDoc, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { UserRole } from '../context/AuthContext';
 
@@ -27,24 +27,25 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchMembers();
-  }, []);
-
-  async function fetchMembers() {
-    try {
-      const q = query(collection(db, 'users'));
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as TeamMember[];
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          email: d.email || '',
+          role: d.role || 'colaborador'
+        } as TeamMember;
+      }).filter(m => m.email); // Only keep users with email
       setMembers(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
       setLoading(false);
-    }
-  }
+    }, (err) => {
+      setError(err.message);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,11 +60,11 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
     try {
       setLoading(true);
       const newDocRef = await addDoc(collection(db, 'users'), {
-        email: newEmail.trim(),
-        role: newRole
+        email: newEmail.trim().toLowerCase(),
+        role: newRole,
+        createdAt: new Date().toISOString()
       });
       
-      setMembers([...members, { id: newDocRef.id, email: newEmail.trim(), role: newRole }]);
       setIsAdding(false);
       setNewEmail('');
       setNewRole('colaborador');
@@ -189,42 +190,98 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
               <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : (
-            <div className="space-y-2">
-              {members.map(member => (
-                <div key={member.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDarkMode ? 'bg-[#13131a] border-white/5 hover:border-white/10' : 'bg-white border-slate-200 hover:border-slate-300'} transition-all`}>
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0 ${member.role === 'admin' ? 'bg-red-500' : member.role === 'cliente' ? 'bg-green-500' : 'bg-blue-500'}`}>
-                      {member.email.charAt(0).toUpperCase()}
+            <div className="space-y-8">
+              {/* Colaboradores */}
+              <div className="space-y-3">
+                <h4 className={`text-[10px] font-black uppercase tracking-widest px-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Colaboradores
+                </h4>
+                <div className="space-y-2">
+                  {members.filter(m => m.role !== 'cliente').map(member => (
+                    <div key={member.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDarkMode ? 'bg-[#13131a] border-white/5 hover:border-white/10' : 'bg-white border-slate-200 hover:border-slate-300'} transition-all`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${member.role === 'admin' ? 'bg-brand-500' : 'bg-slate-500'}`}>
+                          {member.email.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{member.email}</p>
+                          <p className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {member.role === 'admin' ? 'Propietario' : 'Colaborador'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={member.role}
+                          onChange={(e) => handleChangeRole(member.id, member.email, e.target.value as UserRole)}
+                          className={`px-2 py-1.5 rounded-lg text-[10px] font-bold focus:outline-none ${
+                            isDarkMode ? 'bg-white/5 text-slate-300 hover:bg-white/10' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          <option value="admin">Admin</option>
+                          <option value="colaborador">Colaborador</option>
+                          <option value="cliente">Cliente</option>
+                        </select>
+                        <button 
+                          onClick={() => handleDeleteMember(member.id, member.email)}
+                          className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-slate-500 hover:text-red-400 hover:bg-red-500/10' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}
+                          title="Eliminar usuario"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{member.email}</p>
-                      <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {member.role === 'admin' ? 'Administrador' : member.role === 'cliente' ? 'Cliente' : 'Colaborador'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={member.role}
-                      onChange={(e) => handleChangeRole(member.id, member.email, e.target.value as UserRole)}
-                      className={`px-2 py-1.5 rounded-lg text-xs font-medium focus:outline-none ${
-                        isDarkMode ? 'bg-white/5 text-slate-300 hover:bg-white/10' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="colaborador">Colaborador</option>
-                      <option value="cliente">Cliente</option>
-                    </select>
-                    <button 
-                      onClick={() => handleDeleteMember(member.id, member.email)}
-                      className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-slate-500 hover:text-red-400 hover:bg-red-500/10' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}
-                      title="Eliminar usuario"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              {/* Clientes */}
+              <div className="space-y-3">
+                <h4 className={`text-[10px] font-black uppercase tracking-widest px-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Clientes
+                </h4>
+                <div className="space-y-2">
+                  {members.filter(m => m.role === 'cliente').map(member => (
+                    <div key={member.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDarkMode ? 'bg-[#13131a] border-white/5 hover:border-white/10' : 'bg-white border-slate-200 hover:border-slate-300'} transition-all`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 bg-emerald-500`}>
+                          {member.email.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{member.email}</p>
+                          <p className={`text-[10px] font-bold uppercase tracking-wider text-emerald-500`}>
+                            Cliente VIP
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={member.role}
+                          onChange={(e) => handleChangeRole(member.id, member.email, e.target.value as UserRole)}
+                          className={`px-2 py-1.5 rounded-lg text-[10px] font-bold focus:outline-none ${
+                            isDarkMode ? 'bg-white/5 text-slate-300 hover:bg-white/10' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          <option value="admin">Admin</option>
+                          <option value="colaborador">Colaborador</option>
+                          <option value="cliente">Cliente</option>
+                        </select>
+                        <button 
+                          onClick={() => handleDeleteMember(member.id, member.email)}
+                          className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-slate-500 hover:text-red-400 hover:bg-red-500/10' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}
+                          title="Eliminar usuario"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {members.filter(m => m.role === 'cliente').length === 0 && (
+                    <p className="text-[10px] text-slate-500 italic px-1">No hay clientes asignados.</p>
+                  )}
+                </div>
+              </div>
+
               {members.length === 0 && (
                 <div className={`text-center py-8 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                   No hay usuarios configurados.

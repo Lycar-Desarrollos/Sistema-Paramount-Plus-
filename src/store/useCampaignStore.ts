@@ -1,53 +1,130 @@
 import { create } from 'zustand';
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, query, where, setDoc } from 'firebase/firestore';
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  deleteDoc, 
+  getDocs, 
+  query, 
+  where,
+  limit,
+  serverTimestamp,
+  arrayUnion,
+  arrayRemove,
+  setDoc,
+  getDoc
+} from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
 export interface Project {
   id: string;
   name: string;
   createdAt: number;
+  status: 'active' | 'archived';
   favoriteBy?: string[];
   memberEmails?: string[];
-  members?: Record<string, string>;
+  members?: Record<string, UserRole | 'owner'>;
+  clientPermissions?: Record<string, string[]>; // email -> array of table IDs
 }
+
+export type ColumnType = 'text' | 'number' | 'select' | 'date' | 'checkbox' | 'link' | 'user' | 'attachment';
+
+export interface ColumnDefinition {
+  id: string;
+  name: string;
+  type: ColumnType;
+  config?: {
+    options?: { label: string; color: string }[];
+    targetTableId?: string; // Para Linked Records
+  };
+}
+
+export type TableType = 'general' | 'requests';
 
 export interface Table {
   id: string;
   projectId: string;
   name: string;
-  columns: string[];
-  columnLabels: Record<string, string>;
+  type?: TableType;
+  columnDefinitions: ColumnDefinition[];
   createdAt: number;
   favoriteBy?: string[];
 }
 
-export interface Campaign {
+export interface RecordData {
   id: string;
-  projectId: string;
   tableId: string;
-  title: string;
-  category: string | null;
-  [key: string]: any; // Allow dynamic column keys
+  values: Record<string, any>;
+  createdBy?: string; // Track who created the request
   createdAt: number;
+  updatedAt?: number;
 }
 
 export const DEFAULT_CATEGORIES = ['Priority (L)', 'Moderate (M)', 'Tentpole (XL)', 'Social Media', 'Branding'];
 
-export const DEFAULT_COLUMNS = ['atl', 'social', 'partners', 'dr', 'pluto', 'linear', 'editorial', 'tmo', 'tactical'];
+export const MARKETING_REQUEST_COLUMNS: ColumnDefinition[] = [
+  { id: 'title', name: 'Title', type: 'text' },
+  { id: 'status', name: 'Status', type: 'select', config: { 
+    options: [
+      { label: 'Nueva', color: '#6366f1' },
+      { label: 'In process', color: '#f59e0b' },
+      { label: 'En Revisión', color: '#8b5cf6' },
+      { label: 'Aprobado', color: '#10b981' },
+      { label: 'Publicado', color: '#ec4899' }
+    ]
+  }},
+  { id: 'type', name: 'Type Asset', type: 'select', config: {
+    options: [
+      { label: 'Video', color: '#ef4444' },
+      { label: 'Static', color: '#3b82f6' },
+      { label: 'Motion Graphics', color: '#8b5cf6' }
+    ]
+  }},
+  { id: 'cantidad', name: 'Cantidad', type: 'number' },
+  { id: 'channel_s', name: 'Channel (s)', type: 'text' },
+  { id: 'channel_d', name: 'Channel (D)', type: 'text' },
+  { id: 'delivery_a', name: 'Delivery (A)', type: 'text' },
+  { id: 'delivery_d', name: 'Delivery (D)', type: 'text' },
+  { id: 'dimensions', name: 'Dimension', type: 'text' },
+  { id: 'duration', name: 'Duration/s', type: 'text' },
+  { id: 'file_format', name: 'File Format', type: 'text' },
+  { id: 'inc_price', name: 'Include Price?', type: 'checkbox' },
+  { id: 'inc_title', name: 'Include Title?', type: 'text' },
+  { id: 'mkt_own', name: 'MKT OWN', type: 'text' },
+  { id: 'month', name: 'Month', type: 'text' },
+  { id: 'notes', name: 'Notes', type: 'text' }
+];
 
-export const DEFAULT_LABELS: Record<string, string> = {
-  title: 'Title Name',
-  category: 'Category',
-  atl: 'ATL',
-  social: 'Social',
-  partners: 'Partners',
-  dr: 'DR',
-  pluto: 'Pluto',
-  linear: 'Linear',
-  editorial: 'Editorial',
-  tmo: 'TMO',
-  tactical: 'Tactical Act',
-};
+export const DEFAULT_COLUMNS_V2: ColumnDefinition[] = [
+  { id: 'title', name: 'Nombre', type: 'text' },
+  { id: 'category', name: 'Categoría', type: 'select', config: { 
+    options: DEFAULT_CATEGORIES.map(c => ({ label: c, color: '#6366f1' })) 
+  }},
+  { id: 'date', name: 'Fecha', type: 'date' }
+];
+
+export const DEFAULT_FORM_COLUMNS: ColumnDefinition[] = [
+  { id: 'title', name: 'Título de la solicitud', type: 'text' },
+  { id: 'type', name: 'Tipo de Pieza', type: 'select', config: {
+    options: [
+      { label: 'Video', color: '#ef4444' },
+      { label: 'Static', color: '#3b82f6' },
+      { label: 'Motion Graphics', color: '#8b5cf6' }
+    ]
+  }},
+  { id: 'cantidad', name: 'Cantidad de Piezas', type: 'number' },
+  { id: 'channels', name: 'Canales o Plataformas', type: 'text' },
+  { id: 'dimensions', name: 'Dimensiones', type: 'text' },
+  { id: 'duration', name: 'Duración (segundos)', type: 'text' },
+  { id: 'file_format', name: 'Formato de Archivo', type: 'text' },
+  { id: 'delivery_date', name: 'Fecha de Entrega Esperada', type: 'date' },
+  { id: 'notes', name: 'Notas / Descripción', type: 'text' },
+  { id: 'assets', name: 'Archivos de Referencia', type: 'attachment' },
+];
+
+export type UserRole = 'admin' | 'colaborador' | 'cliente';
 
 interface CampaignStore {
   activeProjectId: string;
@@ -56,334 +133,448 @@ interface CampaignStore {
   setActiveTableId: (id: string) => void;
   projects: Project[];
   tables: Table[];
-  campaigns: Campaign[];
-  columns: string[];
-  columnLabels: Record<string, string>;
+  records: RecordData[];
+  allUsers: { email: string; displayName?: string; photoURL?: string }[];
+  columnDefinitions: ColumnDefinition[];
   loading: boolean;
   error: string | null;
-  initializeGlobal: (user: any, userData: any) => () => void; 
-  initializeProjectData: (projectId: string) => () => void; 
+  initializeGlobal: (user: any, userData: any) => () => void;
+  initializeProjectData: (projectId: string) => () => void;
   initializeTableData: (tableId: string) => () => void;
-  addProject: (name: string, template?: { columns: string[], labels: Record<string, string> }) => Promise<void>;
-  addTable: (projectId: string, name: string, template?: { columns: string[], labels: Record<string, string> }, initialRows?: any[]) => Promise<void>;
-  updateTable: (id: string, name: string) => Promise<void>;
-  deleteTable: (id: string) => Promise<void>;
-  addCampaign: () => Promise<void>;
-  updateCampaignField: (id: string, field: string, value: any) => Promise<void>;
-  updateColumnLabel: (field: string, label: string) => Promise<void>;
-  deleteCampaigns: (ids: string[]) => Promise<void>;
-  addColumn: (name: string) => Promise<void>;
-  deleteColumn: (id: string) => Promise<void>;
+  addProject: (name: string, template: string) => Promise<void>;
+  addTable: (projectId: string, name: string, type: TableType, columns: ColumnDefinition[], rows?: any[]) => Promise<void>;
+  addRecord: (tableId: string, values: Record<string, any>) => Promise<void>;
+  updateRecord: (id: string, values: Record<string, any>) => Promise<void>;
+  updateRecordField: (id: string, field: string, value: any) => Promise<void>;
+  deleteRecords: (ids: string[]) => Promise<void>;
+  addColumn: (tableId: string, name: string, type: ColumnType, config?: any) => Promise<void>;
+  deleteColumn: (tableId: string, columnId: string) => Promise<void>;
+  updateColumnConfig: (tableId: string, columnId: string, config: any) => Promise<void>;
+  updateColumn: (tableId: string, columnId: string, updates: Partial<ColumnDefinition>) => Promise<void>;
+  fetchRecordsByTableId: (tableId: string) => Promise<RecordData[]>;
   updateProjectName: (id: string, newName: string) => Promise<void>;
+  updateTable: (id: string, newName: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
-  addMemberToProject: (projectId: string, email: string) => Promise<void>;
+  addMemberToProject: (projectId: string, email: string, role: UserRole) => Promise<void>;
   removeMemberFromProject: (projectId: string, email: string) => Promise<void>;
-  toggleFavoriteProject: (projectId: string, email: string) => Promise<void>;
+  setClientPermissions: (projectId: string, email: string, tableIds: string[]) => Promise<void>;
+  deleteTable: (id: string) => Promise<void>;
   importRows: (projectId: string, tableId: string, rows: any[]) => Promise<void>;
   toggleTableFavorite: (tableId: string) => Promise<void>;
+  toggleFavoriteProject: (projectId: string, email: string) => Promise<void>;
   isProMode: boolean;
   setIsProMode: (val: boolean) => void;
+  isSidebarCollapsed: boolean;
+  setIsSidebarCollapsed: (val: boolean) => void;
+  isAiSimulating: boolean;
+  setIsAiSimulating: (val: boolean) => void;
+  aiLoadingText: string;
+  setAiLoadingText: (val: string) => void;
+  triggerAiSimulation: (textSequence?: string[], duration?: number) => Promise<void>;
 }
 
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
-  activeProjectId: 'lat-br', 
+  activeProjectId: '',
   activeTableId: '',
-  setActiveProjectId: (id: string) => {
-    set({ activeProjectId: id, loading: true });
-  },
-  setActiveTableId: (id: string) => {
-    set({ activeTableId: id, loading: true });
-  },
+  setActiveProjectId: (id) => set({ activeProjectId: id }),
+  setActiveTableId: (id) => set({ activeTableId: id }),
   projects: [],
   tables: [],
-  campaigns: [],
-  columns: DEFAULT_COLUMNS,
-  columnLabels: DEFAULT_LABELS,
+  records: [],
+  allUsers: [],
+  columnDefinitions: [],
   loading: false,
   error: null,
   isProMode: false,
   setIsProMode: (val: boolean) => set({ isProMode: val }),
+  isSidebarCollapsed: localStorage.getItem('natic_sidebar_collapsed') === 'true',
+  setIsSidebarCollapsed: (val: boolean) => {
+    localStorage.setItem('natic_sidebar_collapsed', String(val));
+    set({ isSidebarCollapsed: val });
+  },
+  isAiSimulating: false,
+  setIsAiSimulating: (val: boolean) => set({ isAiSimulating: val }),
+  aiLoadingText: '',
+  setAiLoadingText: (val: string) => set({ aiLoadingText: val }),
+  triggerAiSimulation: async (textSequence = ['Analizando espacio...', 'Optimizando flujos...', 'Listo.'], duration = 3000) => {
+    set({ isAiSimulating: true, aiLoadingText: textSequence[0] });
+    const step = duration / textSequence.length;
+    
+    for (let i = 1; i < textSequence.length; i++) {
+      await new Promise(r => setTimeout(r, step));
+      set({ aiLoadingText: textSequence[i] });
+    }
+    
+    await new Promise(r => setTimeout(r, 500));
+    set({ isAiSimulating: false });
+  },
 
   initializeGlobal: (user: any, userData: any) => {
-    const unsubProjects = onSnapshot(collection(db, 'workspaces'), (snapshot) => {
-      let fetchedProjects = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Project[];
-      
-      // Filter projects based on role
-      if (userData?.role === 'colaborador' || userData?.role === 'cliente') {
-        const userEmail = user?.email?.toLowerCase();
-        fetchedProjects = fetchedProjects.filter(p => {
-          // Si es dueño original (por uid) o está en la lista de memberEmails
-          const isOwner = p.members && p.members[user?.uid];
-          const isMember = p.memberEmails && p.memberEmails.includes(userEmail);
-          return isOwner || isMember;
-        });
-      }
-      
-      const sorted = fetchedProjects.sort((a, b) => a.createdAt - b.createdAt);
+    if (!user || !user.email) {
+      set({ loading: false });
+      return () => {};
+    }
+
+    set({ loading: true });
+
+    // Filtramos los workspaces para que solo traiga donde el usuario es miembro
+    const q = query(
+      collection(db, 'workspaces'), 
+      where('memberEmails', 'array-contains', user.email.toLowerCase())
+    );
+
+    const unsubWorkspaces = onSnapshot(q, (snapshot) => {
+      const workspacesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+      const sorted = workspacesData.sort((a, b) => a.createdAt - b.createdAt);
       set({ projects: sorted, loading: false });
 
-      if (sorted.length === 0 && userData?.role === 'admin') {
-        get().addProject('Campaign Tracker - LAT & BR');
-      } else if (sorted.length > 0) {
-        if (!sorted.find(p => p.id === get().activeProjectId)) {
-          set({ activeProjectId: sorted[0].id });
-        }
+      if (sorted.length > 0 && !get().activeProjectId) {
+        set({ activeProjectId: sorted[0].id });
       }
+    }, (error) => {
+      console.error("Error loading workspaces:", error);
+      set({ loading: false });
     });
 
-    return unsubProjects;
+    let unsubUsers = () => {};
+    const MASTER_ADMIN_UID = "0buVJpHGDMehlHphXsGxWCpPibP2";
+    if (userData?.role === 'admin' || user.uid === MASTER_ADMIN_UID) {
+      unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+        const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+        set({ allUsers: usersData });
+      }, (err) => {
+        console.error("Error in users listener:", err);
+      });
+    }
+
+    return () => {
+      unsubWorkspaces();
+      unsubUsers();
+    };
   },
 
   initializeProjectData: (projectId: string) => {
-    // Only set loading if we don't have tables for this project yet
-    if (get().tables.length === 0) set({ loading: true });
-    
-    const qTables = query(collection(db, 'tables'), where('projectId', '==', projectId));
-    const unsubTables = onSnapshot(qTables, (snapshot) => {
-      const fetchedTables = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Table[];
+    const tablesQuery = query(collection(db, 'tables'), where('projectId', '==', projectId));
+    const unsubscribeTables = onSnapshot(tablesQuery, (snapshot) => {
+      const tablesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Table[];
+      const sorted = tablesData.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       
-      const sorted = fetchedTables.sort((a, b) => a.createdAt - b.createdAt);
       set({ tables: sorted });
 
-      if (sorted.length === 0) {
-        get().addTable(projectId, 'Table 1');
-      } else {
-        const currentActive = get().activeTableId;
-        const firstTableId = sorted[0].id;
-        
-        if (currentActive !== firstTableId && !sorted.find(t => t.id === currentActive)) {
-          set({ activeTableId: firstTableId });
-        } else {
-          // If we already have the correct table active, we might need to clear loading
-          // if initializeTableData isn't going to be triggered by App.tsx
-          set({ loading: false });
+      // Solo cambiamos la tabla activa si no hay una o si la actual ya no existe en este proyecto
+      const currentActiveId = get().activeTableId;
+      if (sorted.length > 0) {
+        if (!currentActiveId || !sorted.find(t => t.id === currentActiveId)) {
+          set({ activeTableId: sorted[0].id });
         }
       }
+      
+      set({ loading: false });
+    }, (error) => {
+      console.error("Error loading tables:", error);
+      set({ loading: false });
     });
 
-    return unsubTables;
+    return unsubscribeTables;
   },
 
   initializeTableData: (tableId: string) => {
-    set({ loading: true });
+    // Traemos solo los registros de la tabla activa para evitar bloqueos de seguridad
+    const q = query(collection(db, 'campaigns'), where('tableId', '==', tableId));
     
-    const unsubTable = onSnapshot(doc(db, 'tables', tableId), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        set({ 
-          columnLabels: { ...DEFAULT_LABELS, ...(data.columnLabels || {}) },
-          columns: data.columns || DEFAULT_COLUMNS
-        });
-      }
-    });
-
-    const qRecords = query(collection(db, 'campaigns'), where('tableId', '==', tableId));
-    const unsubRecords = onSnapshot(qRecords, (snapshot) => {
-      const fetchedData = snapshot.docs.map((doc) => ({
-        id: doc.id,
+    const unsubRecords = onSnapshot(q, (snapshot) => {
+      const fetchedRecords = snapshot.docs.map(doc => ({
         ...doc.data(),
-      })) as Campaign[];
-      fetchedData.sort((a,b) => b.createdAt - a.createdAt);
-      set({ campaigns: fetchedData, loading: false, error: null });
+        id: doc.id
+      })) as RecordData[];
+      
+      const sorted = fetchedRecords.sort((a, b) => b.createdAt - a.createdAt);
+      set({ records: sorted });
+      
+      const table = get().tables.find(t => t.id === tableId);
+      if (table) {
+        set({ columnDefinitions: table.columnDefinitions || [] });
+      }
     }, (error) => {
-      console.error('Firestore Error:', error);
-      set({ error: error.message, loading: false });
+      console.error("Error loading records:", error);
     });
 
-    return () => {
-      unsubTable();
-      unsubRecords();
-    };
+    return unsubRecords;
   },
 
-  addProject: async (name: string, template?: { columns: string[], labels: Record<string, string> }) => {
+  addProject: async (name: string, template: string) => {
     try {
       const user = auth.currentUser;
-      const newRef = await addDoc(collection(db, 'workspaces'), {
+      if (!user || !user.email) throw new Error("Usuario no autenticado");
+      const email = user.email.toLowerCase();
+
+      set({ loading: true });
+      const newProjectRef = await addDoc(collection(db, 'workspaces'), {
         name,
         createdAt: Date.now(),
-        members: user ? { [user.uid]: 'owner' } : {},
-        memberEmails: user && user.email ? [user.email.toLowerCase()] : []
+        status: 'active',
+        ownerId: user.uid,
+        memberEmails: [email],
+        members: { [email.replace(/\./g, '_')]: 'owner' }
       });
-      
-      if (template) {
-        await get().addTable(newRef.id, 'Main Table', template);
-      } else {
-        await get().addTable(newRef.id, 'Table 1');
-      }
-      
-      set({ activeProjectId: newRef.id });
-    } catch (error: any) {
-      set({ error: error.message });
-    }
-  },
 
-  addTable: async (projectId: string, name: string, template?: { columns: string[], labels: Record<string, string> }, initialRows?: any[]) => {
-    try {
-      const newRef = await addDoc(collection(db, 'tables'), {
-        projectId,
-        name,
-        columns: template?.columns || DEFAULT_COLUMNS,
-        columnLabels: template?.labels || DEFAULT_LABELS,
+      const cols = template === 'marketing' ? MARKETING_REQUEST_COLUMNS : DEFAULT_COLUMNS_V2;
+      const type = template === 'marketing' ? 'requests' : 'general';
+      
+      const tableRef = await addDoc(collection(db, 'tables'), {
+        projectId: newProjectRef.id,
+        name: template === 'marketing' ? 'Solicitudes de Marketing' : 'Datos Principales',
+        type,
+        columnDefinitions: cols,
         createdAt: Date.now()
       });
-      set({ activeTableId: newRef.id });
 
-      // If we have initial rows, add them
-      if (initialRows && initialRows.length > 0) {
-        const promises = initialRows.map(row => 
-          addDoc(collection(db, 'campaigns'), {
-            ...row,
-            projectId,
-            tableId: newRef.id,
-            createdAt: Date.now()
-          })
-        );
-        await Promise.all(promises);
-      }
-    } catch (error: any) {
-      set({ error: error.message });
-    }
-  },
+      // Añadir 10 filas por defecto
+      const emptyValues = cols.reduce((acc, col) => {
+        acc[col.id] = "";
+        return acc;
+      }, {} as Record<string, any>);
 
-  updateTable: async (id: string, name: string) => {
-    try {
-      await updateDoc(doc(db, 'tables', id), { name });
-    } catch (error: any) {
-      set({ error: error.message });
-    }
-  },
-
-  deleteTable: async (id: string) => {
-    try {
-      const { tables, activeTableId } = get();
-      await deleteDoc(doc(db, 'tables', id));
-      if (activeTableId === id) {
-        const remaining = tables.filter(t => t.id !== id);
-        if (remaining.length > 0) set({ activeTableId: remaining[0].id });
-      }
-    } catch (error: any) {
-      set({ error: error.message });
-    }
-  },
-
-  addCampaign: async () => {
-    const { activeProjectId, activeTableId } = get();
-    const tempId = `temp-${Date.now()}`;
-    const newRow: Campaign = {
-      id: tempId,
-      projectId: activeProjectId,
-      tableId: activeTableId,
-      title: '',
-      category: null,
-      createdAt: Date.now(),
-    };
-    
-    set((state) => ({ campaigns: [newRow, ...state.campaigns] }));
-    
-    try {
-      const { id, ...rowWithoutId } = newRow;
-      await addDoc(collection(db, 'campaigns'), rowWithoutId);
-    } catch (error: any) {
-      set((state) => ({ 
-        campaigns: state.campaigns.filter(c => c.id !== tempId),
-        error: error.message 
-      }));
-    }
-  },
-
-  updateCampaignField: async (id: string, field: string, value: any) => {
-    const previousCampaigns = get().campaigns;
-    
-    set((state) => ({
-      campaigns: state.campaigns.map((camp) => 
-        camp.id === id ? { ...camp, [field]: value } : camp
-      )
-    }));
-
-    try {
-      const docRef = doc(db, 'campaigns', id);
-      await updateDoc(docRef, { [field]: value });
-    } catch (error: any) {
-      console.error("Error updating document:", error);
-      set({ campaigns: previousCampaigns, error: `Rollback: No se pudo guardar el cambio en ${field}` });
-      setTimeout(() => set({ error: null }), 3000);
-    }
-  },
-
-  updateColumnLabel: async (field: string, label: string) => {
-    const { activeTableId, columnLabels } = get();
-    const previousLabels = columnLabels;
-    
-    set({ columnLabels: { ...columnLabels, [field]: label } });
-    
-    try {
-      await updateDoc(doc(db, 'tables', activeTableId), {
-        columnLabels: { [field]: label }
+      const promises = Array.from({ length: 10 }).map((_, i) => {
+        return addDoc(collection(db, 'campaigns'), {
+          tableId: tableRef.id,
+          values: emptyValues,
+          createdBy: email,
+          createdAt: Date.now() + i
+        });
       });
+      await Promise.all(promises);
+
+      set({ activeProjectId: newProjectRef.id, loading: false });
+    } catch (error: any) {
+      console.error("Error creating project:", error);
+      set({ error: error.message, loading: false });
+    }
+  },
+
+  addTable: async (projectId: string, name: string, type: TableType, columns: ColumnDefinition[], rows?: any[]) => {
+    if (!projectId) {
+      console.error("Cannot add table: projectId is missing");
+      set({ error: "ID de proyecto faltante" });
+      return;
+    }
+    
+    try {
+      console.log("Adding table to project:", projectId, name);
+      
+      // Generamos el ID localmente para que sea instantáneo
+      const tableRef = doc(collection(db, 'tables'));
+      const tableId = tableRef.id;
+
+      const newTable: Table = {
+        id: tableId,
+        projectId,
+        name,
+        type,
+        columnDefinitions: columns,
+        createdAt: Date.now()
+      };
+
+      // 1. Actualizamos la interfaz DE INMEDIATO
+      set(state => ({
+        tables: [...state.tables, newTable].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)),
+        activeTableId: tableId,
+        columnDefinitions: columns
+      }));
+
+      // 2. Guardamos en Firebase en segundo plano
+      const { setDoc } = await import('firebase/firestore');
+      await setDoc(tableRef, {
+        projectId,
+        name,
+        type,
+        columnDefinitions: columns,
+        createdAt: Date.now()
+      });
+
+      // 3. Crear 10 filas por defecto
+      const emptyValues = columns.reduce((acc, col) => {
+        acc[col.id] = "";
+        return acc;
+      }, {} as Record<string, any>);
+
+      const user = auth.currentUser;
+      const email = user?.email || 'System';
+
+      const promises = Array.from({ length: 10 }).map((_, i) => {
+        return addDoc(collection(db, 'campaigns'), {
+          tableId: tableId,
+          values: emptyValues,
+          createdBy: email.toLowerCase(),
+          createdAt: Date.now() + i
+        });
+      });
+      await Promise.all(promises);
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  addRecord: async (tableId: string, values: Record<string, any>) => {
+    const idToUse = tableId || get().activeTableId;
+    
+    if (!idToUse) {
+      console.error("Cannot add record: tableId is missing");
+      set({ error: "ID de tabla faltante" });
+      return;
+    }
+
+    try {
+      const user = auth.currentUser;
+      const email = user?.email || 'System';
+      
+      // Limpiamos los valores para evitar 'undefined' que rompe Firebase
+      const sanitizedValues: Record<string, any> = {};
+      if (values) {
+        Object.keys(values).forEach(key => {
+          if (values[key] !== undefined) {
+            sanitizedValues[key] = values[key];
+          } else {
+            sanitizedValues[key] = ""; // Fallback a vacío
+          }
+        });
+      }
+
+      console.log("Adding record to table:", idToUse, sanitizedValues);
+      
+      const docRef = await addDoc(collection(db, 'campaigns'), {
+        tableId: idToUse,
+        values: sanitizedValues,
+        createdBy: email.toLowerCase(),
+        createdAt: Date.now()
+      });
+      
+      console.log("Record added successfully:", docRef.id);
+    } catch (error: any) {
+      console.error("Error adding record:", error);
+      set({ error: error.message });
+      throw error;
+    }
+  },
+
+  updateRecord: async (id: string, values: Record<string, any>) => {
+    try {
+      const recordRef = doc(db, 'campaigns', id);
+      await updateDoc(recordRef, {
+        values,
+        updatedAt: Date.now()
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  updateRecordField: async (id: string, field: string, value: any) => {
+    try {
+      set(state => ({
+        records: state.records.map(r => r.id === id ? { ...r, values: { ...r.values, [field]: value } } : r)
+      }));
+
+      const recordRef = doc(db, 'campaigns', id);
+      await updateDoc(recordRef, {
+        [`values.${field}`]: value,
+        updatedAt: Date.now()
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  deleteRecords: async (ids: string[]) => {
+    try {
+      for (const id of ids) {
+        await deleteDoc(doc(db, 'campaigns', id));
+      }
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  addColumn: async (tableId: string, name: string, type: ColumnType, config?: any) => {
+    try {
+      const tableRef = doc(db, 'tables', tableId);
+      const newColumn: ColumnDefinition = {
+        id: `col_${Date.now()}`,
+        name,
+        type,
+        config: config || {}
+      };
+      
+      const updatedColumns = [...get().columnDefinitions, newColumn];
+      
+      // Actualización optimista inmediata
+      set({ columnDefinitions: updatedColumns });
+      
+      await updateDoc(tableRef, {
+        columnDefinitions: updatedColumns
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  deleteColumn: async (tableId: string, columnId: string) => {
+    try {
+      const tableRef = doc(db, 'tables', tableId);
+      const updatedColumns = get().columnDefinitions.filter(c => c.id !== columnId);
+      
+      set({ columnDefinitions: updatedColumns });
+
+      await updateDoc(tableRef, {
+        columnDefinitions: updatedColumns
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  updateColumnConfig: async (tableId: string, columnId: string, config: any) => {
+    try {
+      const tableRef = doc(db, 'tables', tableId);
+      const updatedColumns = get().columnDefinitions.map(c => 
+        c.id === columnId ? { ...c, config: { ...c.config, ...config } } : c
+      );
+      
+      set({ columnDefinitions: updatedColumns });
+
+      await updateDoc(tableRef, {
+        columnDefinitions: updatedColumns
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  updateColumn: async (tableId: string, columnId: string, updates: Partial<ColumnDefinition>) => {
+    try {
+      const tableRef = doc(db, 'tables', tableId);
+      const updatedColumns = get().columnDefinitions.map(c => 
+        c.id === columnId ? { ...c, ...updates } : c
+      );
+      
+      set({ columnDefinitions: updatedColumns });
+
+      await updateDoc(tableRef, {
+        columnDefinitions: updatedColumns
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  fetchRecordsByTableId: async (tableId: string) => {
+    try {
+      const q = query(collection(db, 'campaigns'), where('tableId', '==', tableId));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ ...d.data(), id: d.id })) as RecordData[];
     } catch (error: any) {
       console.error(error);
-      set({ columnLabels: previousLabels, error: `Error saving column name` });
-      setTimeout(() => set({ error: null }), 3000);
-    }
-  },
-
-  deleteCampaigns: async (ids: string[]) => {
-    const previousCampaigns = get().campaigns;
-    
-    set((state) => ({
-      campaigns: state.campaigns.filter((camp) => !ids.includes(camp.id))
-    }));
-
-    try {
-      await Promise.all(ids.map((id) => deleteDoc(doc(db, 'campaigns', id))));
-    } catch (error: any) {
-      console.error("Error deleting documents:", error);
-      set({ campaigns: previousCampaigns, error: `Rollback: No se pudo eliminar los registros` });
-      setTimeout(() => set({ error: null }), 3000);
-    }
-  },
-
-  addColumn: async (name: string) => {
-    const { activeTableId, columns, columnLabels } = get();
-    const newColId = `col_${Date.now()}`;
-    const newColumns = [...columns, newColId];
-    
-    set({ 
-      columns: newColumns, 
-      columnLabels: { ...columnLabels, [newColId]: name } 
-    });
- 
-    try {
-      await updateDoc(doc(db, 'tables', activeTableId), {
-        columns: newColumns,
-        columnLabels: { [newColId]: name }
-      });
-    } catch (error: any) {
-      set({ error: `Error al añadir columna` });
-      setTimeout(() => set({ error: null }), 3000);
-    }
-  },
- 
-  deleteColumn: async (id: string) => {
-    const { activeTableId, columns } = get();
-    const newColumns = columns.filter(c => c !== id);
-    
-    set({ columns: newColumns });
- 
-    try {
-      await updateDoc(doc(db, 'tables', activeTableId), {
-        columns: newColumns
-      });
-    } catch (error: any) {
-      set({ error: `Error al eliminar columna` });
-      setTimeout(() => set({ error: null }), 3000);
+      return [];
     }
   },
 
@@ -410,69 +601,107 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   },
 
   updateProjectName: async (id: string, newName: string) => {
-    const previousProjects = get().projects;
-    
-    set((state) => ({
-      projects: state.projects.map((proj) => 
-        proj.id === id ? { ...proj, name: newName } : proj
-      )
-    }));
-
     try {
       const docRef = doc(db, 'workspaces', id);
+      
+      set(state => ({
+        projects: state.projects.map(p => p.id === id ? { ...p, name: newName } : p)
+      }));
+
       await updateDoc(docRef, { name: newName });
     } catch (error: any) {
-      console.error("Error updating project name:", error);
-      set({ projects: previousProjects, error: `Error al renombrar espacio` });
-      setTimeout(() => set({ error: null }), 3000);
+      set({ error: error.message });
+    }
+  },
+
+  updateTable: async (id: string, newName: string) => {
+    try {
+      const docRef = doc(db, 'tables', id);
+      
+      set(state => ({
+        tables: state.tables.map(t => t.id === id ? { ...t, name: newName } : t)
+      }));
+
+      await updateDoc(docRef, { name: newName });
+    } catch (error: any) {
+      set({ error: error.message });
     }
   },
 
   deleteProject: async (id: string) => {
     try {
       await deleteDoc(doc(db, 'workspaces', id));
-      
-      const { activeProjectId, projects } = get();
-      if (activeProjectId === id) {
-        const remainingProjects = projects.filter(p => p.id !== id);
-        if (remainingProjects.length > 0) {
-          set({ activeProjectId: remainingProjects[0].id });
-        }
-      }
     } catch (error: any) {
-      console.error("Error deleting project:", error);
-      set({ error: `Error al eliminar espacio` });
-      setTimeout(() => set({ error: null }), 3000);
+      set({ error: error.message });
     }
   },
 
-  addMemberToProject: async (projectId: string, email: string) => {
+  addMemberToProject: async (projectId: string, email: string, role: UserRole = 'colaborador') => {
     try {
-      const proj = get().projects.find(p => p.id === projectId);
-      if (!proj) return;
-      const currentEmails = proj.memberEmails || [];
-      if (!currentEmails.includes(email.toLowerCase())) {
-        await updateDoc(doc(db, 'workspaces', projectId), {
-          memberEmails: [...currentEmails, email.toLowerCase()]
-        });
+      const docRef = doc(db, 'workspaces', projectId);
+      const docSnap = await (await import('firebase/firestore')).getDoc(docRef);
+      if (!docSnap.exists()) {
+        throw new Error('Workspace no encontrado en la base de datos.');
       }
+
+      const projData = docSnap.data();
+      const currentEmails = projData.memberEmails || [];
+      const emailLower = email.toLowerCase();
+
+      const updateData: any = {
+        [`members.${emailLower.replace(/\./g, '_')}`]: role
+      };
+
+      if (!currentEmails.includes(emailLower)) {
+        updateData.memberEmails = [...currentEmails, emailLower];
+      }
+
+      await updateDoc(docRef, updateData);
     } catch (error: any) {
-      console.error(error);
-      set({ error: 'Error al añadir colaborador' });
-      setTimeout(() => set({ error: null }), 3000);
+      console.error("Error in addMemberToProject:", error);
+      throw error; // Throw so the UI can catch and display the error
     }
   },
-
   removeMemberFromProject: async (projectId: string, email: string) => {
     try {
       const proj = get().projects.find(p => p.id === projectId);
       if (!proj) return;
       const currentEmails = proj.memberEmails || [];
+      const emailLower = email.toLowerCase();
+      
+      const { deleteField } = await import('firebase/firestore');
+      
       await updateDoc(doc(db, 'workspaces', projectId), {
-        memberEmails: currentEmails.filter((e: string) => e !== email.toLowerCase())
+        memberEmails: currentEmails.filter((e: string) => e !== emailLower),
+        [`members.${emailLower.replace(/\./g, '_')}`]: deleteField(),
+        [`clientPermissions.${emailLower.replace(/\./g, '_')}`]: deleteField()
       });
     } catch (error: any) {
       console.error(error);
+    }
+  },
+  
+  setClientPermissions: async (projectId: string, email: string, tableIds: string[]) => {
+    try {
+      const emailKey = email.toLowerCase().replace(/\./g, '_');
+      await updateDoc(doc(db, 'workspaces', projectId), {
+        [`clientPermissions.${emailKey}`]: tableIds
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  deleteTable: async (tableId: string) => {
+    try {
+      await deleteDoc(doc(db, 'tables', tableId));
+      const q = query(collection(db, 'campaigns'), where('tableId', '==', tableId));
+      const snap = await getDocs(q);
+      for (const d of snap.docs) {
+        await deleteDoc(d.ref);
+      }
+    } catch (error: any) {
+      set({ error: error.message });
     }
   },
 
@@ -488,31 +717,21 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
         favoriteBy: isFav ? favs.filter((e: string) => e !== emailLower) : [...favs, emailLower]
       });
     } catch (error: any) {
-      console.error("Error toggling favorite:", error);
+      console.error(error);
     }
   },
   
   importRows: async (projectId: string, tableId: string, rows: any[]) => {
     try {
-      const chunks = [];
-      const chunkSize = 50;
-      for (let i = 0; i < rows.length; i += chunkSize) {
-        chunks.push(rows.slice(i, i + chunkSize));
-      }
-
-      for (const chunk of chunks) {
-        await Promise.all(chunk.map(row => 
-          addDoc(collection(db, 'campaigns'), {
-            ...row,
-            projectId,
-            tableId,
-            createdAt: Date.now()
-          })
-        ));
+      for (const row of rows) {
+        await addDoc(collection(db, 'campaigns'), {
+          tableId,
+          values: row,
+          createdAt: Date.now()
+        });
       }
     } catch (error: any) {
-      console.error("Error importing rows:", error);
-      set({ error: `Error al importar datos: ${error.message}` });
+      set({ error: error.message });
     }
   }
 }));

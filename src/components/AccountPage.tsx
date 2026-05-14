@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Camera, Save, Loader2, User, Mail, Shield, Sun, Moon } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useTheme } from '../context/ThemeContext';
 import { useCampaignStore } from '../store/useCampaignStore';
 import { Sparkles } from 'lucide-react';
+import { useToast } from './Toast';
 
 interface Props {
   user: any;
@@ -15,6 +17,7 @@ interface Props {
 }
 
 export default function AccountPage({ user, userData, onBack, isProMode, onToggleProMode }: Props) {
+  const { showToast } = useToast();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const [displayName, setDisplayName] = useState(userData?.displayName || user?.displayName || '');
   const [description, setDescription] = useState(userData?.description || '');
@@ -89,10 +92,10 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
         ...(finalPhotoUrl && { photoURL: finalPhotoUrl })
       }, { merge: true });
 
-      alert("Perfil actualizado correctamente");
+      showToast("Perfil actualizado correctamente", "success");
     } catch (error: any) {
       console.error("Error updating profile:", error);
-      alert(error.message || "Error al actualizar el perfil.");
+      showToast(error.message || "Error al actualizar el perfil.", "error");
     } finally {
       setLoading(false);
     }
@@ -116,8 +119,24 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
         </div>
         
         <div className="flex items-center gap-4">
-          <div className={`flex items-center gap-3 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
-            <div className="flex items-center gap-1.5">
+          <motion.div 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`flex items-center gap-3 px-3 py-1.5 rounded-full border transition-all relative overflow-hidden ${
+              isProMode 
+                ? (isDarkMode ? 'border-brand-500/50 bg-brand-500/10 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'border-brand-200 bg-brand-50 shadow-sm')
+                : (isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm')
+            }`}
+          >
+            {isProMode && (
+              <motion.div 
+                layoutId="ai-glow-account"
+                className="absolute inset-0 bg-gradient-to-r from-brand-500/20 to-pink-500/20 blur-md"
+                animate={{ opacity: [0.3, 0.6, 0.3] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+              />
+            )}
+            <div className="flex items-center gap-1.5 relative z-10">
               <Sparkles className={`w-3.5 h-3.5 transition-colors ${isProMode ? 'text-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`} />
               <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isProMode ? 'text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
                 PRO IA
@@ -125,11 +144,14 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
             </div>
             <button 
               onClick={() => onToggleProMode()}
-              className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${isProMode ? 'bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
+              className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors z-10 ${isProMode ? 'bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
             >
-              <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${isProMode ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              <motion.span 
+                animate={{ x: isProMode ? 16 : 2 }}
+                className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
+              />
             </button>
-          </div>
+          </motion.div>
 
           <button
             onClick={toggleDarkMode}

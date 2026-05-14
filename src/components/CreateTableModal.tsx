@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Layout, Upload, FileText, Table as TableIcon, ArrowRight, Loader2 } from 'lucide-react';
+import { X, Layout, Upload, FileText, Table as TableIcon, ArrowRight, Loader2, Send } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
@@ -7,13 +7,13 @@ import { useTheme } from '../context/ThemeContext';
 
 interface Props {
   onClose: () => void;
-  onCreate: (name: string, template?: { columns: string[], labels: Record<string, string> }, rows?: any[]) => Promise<void>;
+  onCreate: (name: string, template?: { columns: string[], labels: Record<string, string> }, rows?: any[], type?: 'general' | 'requests') => Promise<void>;
 }
 
 export default function CreateTableModal({ onClose, onCreate }: Props) {
   const { isDarkMode } = useTheme();
   const [name, setName] = useState('');
-  const [mode, setMode] = useState<'blank' | 'import'>('blank');
+  const [mode, setMode] = useState<'blank' | 'import' | 'form'>('blank');
   const [isLoading, setIsLoading] = useState(false);
   const [importedData, setImportedData] = useState<{ columns: string[], labels: Record<string, string>, rows: any[] } | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -82,7 +82,8 @@ export default function CreateTableModal({ onClose, onCreate }: Props) {
     }
 
     try {
-      await onCreate(name.trim(), templateData, importedData?.rows);
+      const tableType = mode === 'form' ? 'requests' : 'general';
+      await onCreate(name.trim(), templateData, importedData?.rows, tableType);
       onClose();
     } catch (error) {
       console.error("Error creating table:", error);
@@ -120,7 +121,7 @@ export default function CreateTableModal({ onClose, onCreate }: Props) {
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ej: Seguimiento de Leads"
+              placeholder={mode === 'form' ? "Ej: Solicitudes de Clientes" : "Ej: Seguimiento de Leads"}
               className={`w-full px-5 py-4 rounded-2xl border-2 outline-none transition-all text-base font-medium ${
                 isDarkMode 
                   ? 'bg-white/5 border-white/5 focus:border-brand-500 text-white' 
@@ -130,10 +131,10 @@ export default function CreateTableModal({ onClose, onCreate }: Props) {
           </div>
 
           {/* Creation Mode */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             <button
               onClick={() => setMode('blank')}
-              className={`flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all text-center ${
+              className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-center ${
                 mode === 'blank'
                   ? 'border-brand-500 bg-brand-500/5'
                   : (isDarkMode ? 'border-white/5 bg-white/5 hover:border-white/10' : 'border-slate-100 bg-slate-50 hover:border-slate-200')
@@ -142,12 +143,12 @@ export default function CreateTableModal({ onClose, onCreate }: Props) {
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${mode === 'blank' ? 'bg-brand-500 text-white' : 'bg-slate-500/20 text-slate-400'}`}>
                 <Layout className="w-5 h-5" />
               </div>
-              <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>En blanco</span>
+              <span className={`text-[11px] font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Tabla Normal</span>
             </button>
 
             <button
               onClick={() => setMode('import')}
-              className={`flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all text-center ${
+              className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-center ${
                 mode === 'import'
                   ? 'border-brand-500 bg-brand-500/5'
                   : (isDarkMode ? 'border-white/5 bg-white/5 hover:border-white/10' : 'border-slate-100 bg-slate-50 hover:border-slate-200')
@@ -156,7 +157,21 @@ export default function CreateTableModal({ onClose, onCreate }: Props) {
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${mode === 'import' ? 'bg-brand-500 text-white' : 'bg-slate-500/20 text-slate-400'}`}>
                 <Upload className="w-5 h-5" />
               </div>
-              <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Importar datos</span>
+              <span className={`text-[11px] font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Importar CSV</span>
+            </button>
+
+            <button
+              onClick={() => setMode('form')}
+              className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-center ${
+                mode === 'form'
+                  ? 'border-emerald-500 bg-emerald-500/5'
+                  : (isDarkMode ? 'border-white/5 bg-white/5 hover:border-white/10' : 'border-slate-100 bg-slate-50 hover:border-slate-200')
+              }`}
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${mode === 'form' ? 'bg-emerald-500 text-white' : 'bg-slate-500/20 text-slate-400'}`}>
+                <Send className="w-5 h-5" />
+              </div>
+              <span className={`text-[11px] font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Formulario Público</span>
             </button>
           </div>
 
@@ -211,6 +226,21 @@ export default function CreateTableModal({ onClose, onCreate }: Props) {
             </div>
           )}
 
+          {/* Form Explainer Zone */}
+          {mode === 'form' && (
+            <div className={`p-4 rounded-xl border animate-in fade-in slide-in-from-top-4 duration-300 ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'}`}>
+              <div className="flex gap-3 items-start">
+                <FileText className={`w-5 h-5 shrink-0 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                <div>
+                  <h4 className={`text-xs font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}>Modo Formulario</h4>
+                  <p className={`text-[11px] mt-1 ${isDarkMode ? 'text-emerald-200' : 'text-emerald-600/80'}`}>
+                    Crea una tabla con un enlace público. Las columnas que configures serán las preguntas que el cliente deba responder. Podrán subir archivos y todo llegará a esta tabla.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Footer Actions */}
           <div className="pt-4 flex items-center justify-end gap-3">
             <button
@@ -225,7 +255,9 @@ export default function CreateTableModal({ onClose, onCreate }: Props) {
               className={`flex items-center gap-2 px-8 py-3 rounded-2xl text-sm font-bold transition-all shadow-lg ${
                 !name.trim() || isLoading || (mode === 'import' && !importedData)
                   ? (isDarkMode ? 'bg-white/5 text-slate-600' : 'bg-slate-100 text-slate-400')
-                  : (isDarkMode ? 'bg-white text-slate-900 hover:bg-slate-200 shadow-white/5' : 'bg-slate-900 text-white hover:bg-slate-800')
+                  : (mode === 'form' 
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/20' 
+                      : (isDarkMode ? 'bg-white text-slate-900 hover:bg-slate-200 shadow-white/5' : 'bg-slate-900 text-white hover:bg-slate-800'))
               }`}
             >
               {isLoading ? (

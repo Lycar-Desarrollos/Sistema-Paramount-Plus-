@@ -1,5 +1,6 @@
 // NaticBox App - Main Entry Point
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Database, Zap as ZapIcon, Layout, FormInput, LogOut, Plus, CheckCircle2, Pencil, Sun, Moon, Download, FileSpreadsheet, FileText, Clipboard, ChevronDown as ChevronDownIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
@@ -7,6 +8,7 @@ import { UserMenu } from './components/UserMenu';
 import Dashboard from './components/Dashboard';
 import GridEngine from './components/GridEngine';
 import KanbanBoard from './components/KanbanBoard';
+import { useToast } from './components/Toast';
 
 import Login from './components/Login';
 import CreateProjectModal from './components/CreateProjectModal';
@@ -17,18 +19,27 @@ import AccountPage from './components/AccountPage';
 import GalleryView from './components/GalleryView';
 import MarketingHub from './pages/marketing/MarketingHub';
 import HomePage from './components/HomePage';
+import PublicFormView from './components/PublicFormView';
 import AIChat from './components/AIChat';
+import ClientPortal from './components/ClientPortal';
 import { useAuth } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
 import { auth } from './firebase';
 import { signOut } from 'firebase/auth';
 
 import { ChevronDown, X, MessageSquare } from 'lucide-react';
-import { useCampaignStore } from './store/useCampaignStore';
+import { useCampaignStore, DEFAULT_COLUMNS_V2, DEFAULT_FORM_COLUMNS, type ColumnType } from './store/useCampaignStore';
 
 type MainTab = 'datos' | 'automatizaciones' | 'interfaces' | 'marketing';
 
+
+
 export default function App() {
+  if (window.location.pathname.startsWith('/form/')) {
+    return <PublicFormView />;
+  }
+
+  const { showToast } = useToast();
   const { user, userData, loading: authLoading } = useAuth();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const [currentTab, setCurrentTab] = useState<MainTab>('datos');
@@ -63,25 +74,27 @@ export default function App() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState('');
   
-  const [projectToDelete, setProjectToDelete] = useState<{id: string, name: string} | null>(null);
 
-  const [isAiSimulating, setIsAiSimulating] = useState(false);
-  const [aiLoadingText, setAiLoadingText] = useState('');
+
 
   const { 
     activeProjectId, setActiveProjectId, 
     activeTableId, setActiveTableId,
-    projects, tables, campaigns, 
+    projects, tables, records, 
     initializeGlobal, initializeProjectData, initializeTableData,
     addProject, addTable, updateTable, deleteTable,
-    addCampaign, updateCampaignField, 
+    addRecord, updateRecordField, 
     updateProjectName, deleteProject,
     isProMode, setIsProMode,
+    isAiSimulating, setIsAiSimulating,
+    aiLoadingText, setAiLoadingText,
+    triggerAiSimulation,
+    isSidebarCollapsed, setIsSidebarCollapsed,
     loading: dataLoading 
   } = useCampaignStore();
   
-  const activeProject = projects.find(p => p.id === activeProjectId) || projects[0] || { name: 'Cargando...' };
-  const activeTable = tables.find(t => t.id === activeTableId) || tables[0];
+  const activeProject = projects.find(p => p.id === activeProjectId) || projects[0] || { id: '', name: 'Cargando...' };
+  const activeTable = tables.find(t => t.id === activeTableId) || tables[0] || { id: '', name: 'Sin tablas', columnDefinitions: [] };
 
   useEffect(() => {
     localStorage.setItem('natic_show_home', JSON.stringify(showHome));
@@ -132,35 +145,24 @@ export default function App() {
 
   const handleProToggle = () => {
     if (!isProMode) {
-      setIsAiSimulating(true);
-      setAiLoadingText('Analizando espacio de trabajo...');
-      
-      setTimeout(() => setAiLoadingText('Optimizando flujos de datos...'), 1500);
-      setTimeout(() => setAiLoadingText('Agente IA activado y listo.'), 3000);
-      
-      setTimeout(() => {
-        setIsAiSimulating(false);
-        setIsProMode(true);
-      }, 3500);
+      triggerAiSimulation(['Iniciando NaticBox AI...', 'Sincronizando modelos neuronales...', 'Agente IA activado y listo.'], 2500)
+        .then(() => setIsProMode(true));
     } else {
+      // Small feedback even when deactivating
       setIsProMode(false);
     }
   };
 
   const handleExport = (format: 'xlsx' | 'csv' | 'copy') => {
-    if (!activeTable || campaigns.length === 0) return;
+    if (!activeTable || records.length === 0) return;
     
-    // Map data to readable format using column labels
-    const exportData = campaigns.map(row => {
+    const exportData = records.map(rec => {
       const mapped: Record<string, any> = {};
-      const labels = activeTable.columnLabels || {};
+      const cols = activeTable.columnDefinitions || [];
       
-      // Get all keys except internal ones
-      const allKeys = Object.keys(row).filter(k => !['id', 'projectId', 'tableId', 'createdAt', 'updatedAt'].includes(k));
-      
-      // Include all keys, using labels if available
-      allKeys.forEach(col => {
-        mapped[labels[col] || col] = row[col];
+      cols.forEach(col => {
+        const val = rec.values[col.id];
+        mapped[col.name] = typeof val === 'object' ? JSON.stringify(val) : val;
       });
       
       return mapped;
@@ -185,7 +187,7 @@ export default function App() {
     } else if (format === 'copy') {
       const text = JSON.stringify(exportData, null, 2);
       navigator.clipboard.writeText(text);
-      alert('Datos copiados al portapapeles');
+      showToast('Datos copiados al portapapeles', 'info');
     }
     
     setShowExportMenu(false);
@@ -201,37 +203,65 @@ export default function App() {
     return <Login />;
   }
 
+  // Redirect to Client Portal if user is a client
+  if (userData?.role === 'cliente') {
+    return <ClientPortal />;
+  }
+
   // Wait for Firebase to return initial data
   if (!appReady) {
     return <div className="h-screen w-screen flex items-center justify-center bg-[#030305]"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div></div>;
   }
 
   if (showTeamManagement) {
-    return <TeamPage onBack={() => setShowTeamManagement(false)} user={user} userData={userData} isProMode={isProMode} onToggleProMode={handleProToggle} />;
+    return (
+      <>
+        <TeamPage onBack={() => setShowTeamManagement(false)} user={user} userData={userData} activeProjectId={activeProjectId} isProMode={isProMode} onToggleProMode={handleProToggle} />
+        {isAiSimulating && <AISimulationOverlay />}
+      </>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
   }
 
   if (showAccountSettings) {
-    return <AccountPage user={user} userData={userData} onBack={() => setShowAccountSettings(false)} isProMode={isProMode} onToggleProMode={handleProToggle} />;
+    return (
+      <>
+        <AccountPage user={user} userData={userData} onBack={() => setShowAccountSettings(false)} isProMode={isProMode} onToggleProMode={handleProToggle} />
+        {isAiSimulating && <AISimulationOverlay />}
+      </>
+    );
+  }
+
+  // Redirect clients to their dedicated portal
+  if (userData?.role === 'cliente') {
+    return <ClientPortal user={user} />;
   }
 
   if (showHome) {
     return (
       <>
-        <HomePage
+        <HomePage 
+          user={user} 
+          userData={userData}
           projects={projects}
           tables={tables}
-          user={user}
-          userData={userData}
           isProMode={isProMode}
           onToggleProMode={handleProToggle}
-          onPreviewProject={(id) => setActiveProjectId(id)}
+          onLogout={() => signOut(auth)}
+          onOpenProject={(id) => {
+            setActiveProjectId(id);
+            setShowHome(false);
+          }}
           onOpenTable={(projectId, tableId) => {
             setActiveProjectId(projectId);
             setActiveTableId(tableId);
             setShowHome(false);
           }}
           onCreateProject={() => setIsCreatingProject(true)}
-          onDeleteProject={(project) => setProjectToDelete(project)}
+          onDeleteProject={(project) => deleteProject(project.id)}
           onManageTeam={() => setShowTeamManagement(true)}
           onManageAccount={() => setShowAccountSettings(true)}
           onCreateTable={(projectId) => {
@@ -245,7 +275,6 @@ export default function App() {
             onCreate={async (name, template, rows) => {
               await addProject(name, template);
               setIsCreatingProject(false);
-              // Si se importaron filas
               if (rows && rows.length > 0) {
                 const state = useCampaignStore.getState();
                 const newProjectId = state.activeProjectId;
@@ -258,44 +287,40 @@ export default function App() {
             }} 
           />
         )}
-        {projectToDelete && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className={`border rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden ${
-              isDarkMode ? 'bg-[#13131a] border-white/10' : 'bg-white border-slate-200'
-            }`}>
-              <div className={`p-6 border-b flex items-start gap-4 ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
-                <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                </div>
-                <div>
-                  <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Eliminar espacio</h3>
-                  <p className={`text-sm mt-2 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    ¿Estás seguro de que deseas eliminar el espacio <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>"{projectToDelete.name}"</span>? Esta acción eliminará permanentemente todos los datos y no se puede deshacer.
-                  </p>
-                </div>
-              </div>
-              <div className={`p-6 flex items-center justify-end gap-3 ${isDarkMode ? 'bg-white/[0.02] border-t border-white/5' : 'bg-slate-50 border-t border-slate-100'}`}>
-                <button 
-                  onClick={() => setProjectToDelete(null)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                    isDarkMode ? 'text-slate-300 hover:text-white hover:bg-white/5' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                  }`}
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={async () => {
-                    await deleteProject(projectToDelete.id);
-                    setProjectToDelete(null);
-                  }}
-                  className="px-6 py-2 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20"
-                >
-                  Sí, eliminar
-                </button>
-              </div>
-            </div>
-          </div>
+        {isCreateTableModalOpen && (
+          <CreateTableModal
+            onClose={() => setIsCreateTableModalOpen(false)}
+            onCreate={async (name, template, rows, type) => {
+              const cols = template
+                ? template.columns.map(id => ({
+                    id,
+                    name: template.labels[id] || id,
+                    type: 'text' as ColumnType
+                  }))
+                : (type === 'requests' ? DEFAULT_FORM_COLUMNS : DEFAULT_COLUMNS_V2);
+
+              await addTable(activeProjectId, name, type || 'general', cols);
+
+              if (rows && rows.length > 0) {
+                const state = useCampaignStore.getState();
+                const newTableId = state.activeTableId;                if (activeProjectId && newTableId) {
+                  await state.importRows(activeProjectId, newTableId, rows);
+                }
+              }
+              setShowHome(false);
+            }}
+          />
         )}
+        <CustomDialog
+          isOpen={dialogConfig.isOpen}
+          onClose={() => setDialogConfig(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={dialogConfig.onConfirm}
+          title={dialogConfig.title}
+          message={dialogConfig.message}
+          type={dialogConfig.type}
+          defaultValue={dialogConfig.defaultValue}
+          confirmText={dialogConfig.confirmText}
+        />
       </>
     );
   }
@@ -304,20 +329,7 @@ export default function App() {
     <div className={`flex flex-col h-screen font-sans overflow-hidden selection:bg-brand-500/30 transition-colors duration-500 ${isDarkMode ? 'bg-[#030305] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       
       {/* AI Agent Simulation Overlay */}
-      {isAiSimulating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0a0f]/90 backdrop-blur-xl">
-          <div className="flex flex-col items-center">
-            <div className="relative w-24 h-24 mb-8">
-              <div className="absolute inset-0 border-t-2 border-brand-500 rounded-full animate-spin"></div>
-              <div className="absolute inset-2 border-r-2 border-pink-500 rounded-full animate-[spin_1.5s_linear_infinite_reverse]"></div>
-              <div className="absolute inset-4 border-b-2 border-purple-500 rounded-full animate-[spin_2s_linear_infinite]"></div>
-              <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-white animate-pulse" />
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">NaticBox AI Agent</h2>
-            <p className="text-brand-300 font-mono text-sm">{aiLoadingText}</p>
-          </div>
-        </div>
-      )}
+      {isAiSimulating && <AISimulationOverlay />}
 
       {isCreatingProject && (
         <CreateProjectModal 
@@ -356,44 +368,7 @@ export default function App() {
               </button>
             </div>
 
-            {projectToDelete && (
-              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                <div className={`border rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden ${
-                  isDarkMode ? 'bg-[#13131a] border-white/10' : 'bg-white border-slate-200'
-                }`}>
-                  <div className={`p-6 border-b flex items-start gap-4 ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
-                    <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                    </div>
-                    <div>
-                      <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Eliminar espacio</h3>
-                      <p className={`text-sm mt-2 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        ¿Estás seguro de que deseas eliminar el espacio <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>"{projectToDelete.name}"</span>? Esta acción eliminará permanentemente todos los datos y no se puede deshacer.
-                      </p>
-                    </div>
-                  </div>
-                  <div className={`p-6 flex items-center justify-end gap-3 ${isDarkMode ? 'bg-white/[0.02] border-t border-white/5' : 'bg-slate-50 border-t border-slate-100'}`}>
-                    <button 
-                      onClick={() => setProjectToDelete(null)}
-                      className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                        isDarkMode ? 'text-slate-300 hover:text-white hover:bg-white/5' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                      }`}
-                    >
-                      Cancelar
-                    </button>
-                    <button 
-                      onClick={async () => {
-                        await deleteProject(projectToDelete.id);
-                        setProjectToDelete(null);
-                      }}
-                      className="px-6 py-2 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20"
-                    >
-                      Sí, eliminar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+
 
             <div className="p-8 overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -466,7 +441,7 @@ export default function App() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setProjectToDelete({ id: proj.id, name: proj.name });
+                                    onDeleteProject({ id: proj.id, name: proj.name });
                                   }}
                                   className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-red-500/10 hover:text-red-500 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
                                   title="Eliminar espacio"
@@ -514,67 +489,20 @@ export default function App() {
         </div>
       )}
 
-      <header className={`h-14 flex items-center justify-between px-4 border-b z-20 ${isDarkMode ? 'bg-[#0a0a0f]/90 backdrop-blur-md border-dark-border' : 'bg-white border-slate-200'}`}>
+      <header className={`h-14 flex-shrink-0 flex items-center justify-between px-4 border-b z-20 ${isDarkMode ? 'bg-[#0a0a0f]/90 backdrop-blur-md border-dark-border' : 'bg-white/80 backdrop-blur-md border-slate-200'}`}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setShowHome(true)} title="Ir al inicio">
-            <div className="w-8 h-8 rounded-[10px] bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform">
+            <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-brand-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-brand-500/30 group-hover:scale-105 transition-transform">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <span className={`text-xl font-bold tracking-tight hidden sm:block ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
               NaticBox
             </span>
           </div>
-
-          <div className={`h-5 w-px mx-1 ${isDarkMode ? 'bg-white/10' : 'bg-slate-200'}`}></div>
-
-          <div className="relative">
-            <button 
-              onClick={() => setIsWorkspaceModalOpen(true)}
-              className={`flex items-center gap-2 font-semibold text-sm tracking-tight px-3 py-1.5 rounded-md transition-colors ${isDarkMode ? 'text-white hover:bg-white/10' : 'text-slate-900 hover:bg-slate-100'}`}
-            >
-              {activeProject.name}
-              <ChevronDown className="w-4 h-4 text-slate-400" />
-            </button>
-          </div>
         </div>
 
-        <div className="hidden lg:flex flex-1 justify-center items-center space-x-1 h-full mx-4">
-          {[
-            { id: 'datos', label: 'Datos', icon: Database },
-            { id: 'automatizaciones', label: 'Automatizaciones', icon: ZapIcon },
-            { id: 'interfaces', label: 'Interfaces', icon: Layout },
-            { id: 'marketing', label: 'Marketing', icon: Sparkles }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setCurrentTab(tab.id as MainTab)}
-              className={`h-full flex items-center gap-2 px-4 text-sm font-medium border-b-2 transition-all ${
-                currentTab === tab.id
-                  ? 'border-brand-500 text-brand-400'
-                  : `border-transparent ${isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-900'}`
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        
         <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-3 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
-            <div className="flex items-center gap-1.5">
-              <Sparkles className={`w-3.5 h-3.5 transition-colors ${isProMode ? 'text-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`} />
-              <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isProMode ? 'text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
-                PRO IA
-              </span>
-            </div>
-            <button 
-              onClick={() => handleProToggle()}
-              className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${isProMode ? 'bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
-            >
-              <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${isProMode ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
+
 
           <button 
             onClick={toggleDarkMode}
@@ -587,20 +515,65 @@ export default function App() {
         </div>
       </header>
 
+      {/* Main Tabs Toolbar */}
+      <div className={`h-12 flex-shrink-0 flex items-center justify-between px-6 border-b z-10 transition-colors ${isDarkMode ? 'bg-[#0f0f13] border-white/5 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.5)]' : 'bg-white border-slate-200 shadow-sm'}`}>
+        <div className="w-1/4 flex items-center">
+          <button 
+            onClick={() => setIsWorkspaceModalOpen(true)}
+            className={`flex items-center gap-2 font-bold text-sm tracking-tight px-3 py-1.5 rounded-xl transition-all truncate ${
+              isDarkMode 
+                ? 'text-white hover:bg-white/5 border border-transparent hover:border-white/10' 
+                : 'text-slate-900 hover:bg-slate-50 border border-transparent hover:border-slate-200'
+            }`}
+          >
+            {activeProject.name}
+            <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          </button>
+        </div>
+
+        <div className="flex-1 flex justify-center h-full">
+          <div className="flex items-center space-x-1 h-full">
+            {[
+              { id: 'datos', label: 'Datos', icon: Database },
+              { id: 'automatizaciones', label: 'Automatizaciones', icon: ZapIcon },
+              { id: 'interfaces', label: 'Interfaces', icon: Layout },
+              { id: 'marketing', label: 'Marketing', icon: Sparkles }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setCurrentTab(tab.id as MainTab)}
+                className={`h-full flex items-center gap-2 px-6 text-xs font-bold border-b-2 transition-all ${
+                  currentTab === tab.id
+                    ? 'border-brand-500 text-brand-500 bg-brand-500/[0.03]'
+                    : `border-transparent ${isDarkMode ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.02]' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`
+                }`}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="w-1/4 flex items-center justify-end">
+           {/* Placeholder to maintain balance for centering */}
+        </div>
+      </div>
+
       <main className="flex-1 flex overflow-hidden relative">
         {isDarkMode && (
           <>
-            <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-brand-600/10 rounded-full blur-[120px] -z-10 pointer-events-none mix-blend-screen"></div>
-            <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-pink-600/10 rounded-full blur-[100px] -z-10 pointer-events-none mix-blend-screen"></div>
+            <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-brand-600/5 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
+            <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-pink-600/5 rounded-full blur-[100px] -z-10 pointer-events-none"></div>
           </>
         )}
 
-        <div className="flex-1 overflow-auto flex flex-col">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {currentTab === 'datos' && (
             <main className="flex-1 flex flex-col overflow-hidden relative">
-        <div className={`flex items-center px-6 border-b h-12 transition-colors ${isDarkMode ? 'bg-[#0f0f13] border-white/5' : 'bg-white border-slate-200'}`}>
+        <div className={`flex items-center px-6 border-b h-12 transition-colors ${isDarkMode ? 'bg-[#0f0f13]/80 backdrop-blur-sm border-white/5' : 'bg-white/80 backdrop-blur-sm border-slate-200'}`}>
           <div className="flex items-center gap-1 overflow-x-auto no-scrollbar h-full mr-4">
-            {tables.map(table => (
+            {tables.filter(t => t.projectId === activeProjectId).map(table => (
               <div
                 key={table.id}
                 onClick={() => setActiveTableId(table.id)}
@@ -660,7 +633,7 @@ export default function App() {
               }`}
             >
               <Plus className="w-4 h-4" />
-              <span>Add or import</span>
+              <span>Nueva tabla</span>
             </button>
           </div>
 
@@ -746,8 +719,23 @@ export default function App() {
         {isCreateTableModalOpen && (
           <CreateTableModal
             onClose={() => setIsCreateTableModalOpen(false)}
-            onCreate={async (name, template, rows) => {
-              await addTable(activeProjectId, name, template, rows);
+            onCreate={async (name, template, rows, type) => {
+              const cols = template
+                ? template.columns.map(id => ({
+                    id,
+                    name: template.labels[id] || id,
+                    type: 'text' as ColumnType
+                  }))
+                : (type === 'requests' ? DEFAULT_FORM_COLUMNS : DEFAULT_COLUMNS_V2);
+
+              await addTable(activeProjectId, name, type || 'general', cols);
+
+              if (rows && rows.length > 0) {
+                const state = useCampaignStore.getState();
+                const newTableId = state.activeTableId;                if (activeProjectId && newTableId) {
+                  await state.importRows(activeProjectId, newTableId, rows);
+                }
+              }
               setShowHome(false);
             }}
           />
@@ -763,12 +751,7 @@ export default function App() {
           defaultValue={dialogConfig.defaultValue}
           confirmText={dialogConfig.confirmText}
         />
-        {isProMode && !isAiSimulating && (
-          <AIChat 
-            onClose={() => setIsProMode(false)} 
-            userData={userData} 
-          />
-        )}
+
       </main>
     </div>
   );

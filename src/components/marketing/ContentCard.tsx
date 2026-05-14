@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Paperclip, Clock, CheckCircle2, User } from 'lucide-react';
+import { MessageSquare, Paperclip, Clock, CheckCircle2, User, FileText } from 'lucide-react';
 import type { ContentItem, Platform } from '../../types/marketing';
 import { motion } from 'framer-motion';
 
@@ -51,7 +51,14 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item, isDarkMode = tru
       {/* Asset Preview Placeholder if attachment exists */}
       {item.attachments && item.attachments.length > 0 && (
         <div className="w-full h-32 rounded-xl bg-gradient-to-br from-brand-500/20 to-purple-500/20 mb-4 flex items-center justify-center overflow-hidden relative border border-white/5">
-           <img src={item.attachments[0].url} alt={item.title} className="w-full h-full object-cover opacity-60" />
+           {item.attachments[0].url.toLowerCase().endsWith('.pdf') || item.attachments[0].type?.includes('pdf') ? (
+             <div className="flex flex-col items-center gap-2">
+                <FileText className="w-10 h-10 text-brand-400" />
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{item.attachments[0].name || 'Documento PDF'}</span>
+             </div>
+           ) : (
+             <img src={item.attachments[0].url} alt={item.title} className="w-full h-full object-cover opacity-60" />
+           )}
            <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
         </div>
       )}

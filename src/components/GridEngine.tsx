@@ -1,577 +1,1068 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2 } from 'lucide-react';
-import { useCampaignStore, DEFAULT_CATEGORIES } from '../store/useCampaignStore';
-import { cn } from '../lib/utils';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2, Calendar, Link2, User, ChevronDown, X, Loader2, Maximize2, Rows, List, Paperclip, Upload, FileText } from 'lucide-react';
+import { useCampaignStore, type ColumnDefinition, type ColumnType, type RecordData } from '../store/useCampaignStore';
+import { cn, hashColor, AVATAR_COLORS } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-const COLORS = [
-  'bg-pink-500/20 text-pink-300 border-pink-500/30',
-  'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-  'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  'bg-orange-500/20 text-orange-300 border-orange-500/30',
-  'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-  'bg-violet-500/20 text-violet-300 border-violet-500/30',
-  'bg-amber-500/20 text-amber-300 border-amber-500/30',
-  'bg-slate-500/20 text-slate-300 border-slate-500/30'
-];
+const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-const Tag = ({ children, colorClass, onClick }: { children: React.ReactNode, colorClass: string, onClick?: () => void }) => {
-  if (!children) return null;
-  return (
-    <span 
-      onClick={onClick}
-      className={cn(
-        "px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap border cursor-pointer hover:opacity-80 transition-opacity",
-        colorClass
-      )}
-    >
-      {children}
-    </span>
-  );
-};
-
-const EditableHeader = ({ field, minW = '90px', onDelete }: { field: string, minW?: string, onDelete?: (field: string) => void }) => {
+const DynamicCell = ({ record, column, setIsLinkingRecord }: { record: RecordData, column: ColumnDefinition, setIsLinkingRecord: any }) => {
   const { isDarkMode } = useTheme();
-  const label = useCampaignStore(state => state.columnLabels[field]);
-  const updateColumnLabel = useCampaignStore(state => state.updateColumnLabel);
-  const [isEditing, setIsEditing] = useState(false);
-  const [value, setValue] = useState(label || field);
+  const updateRecordField = useCampaignStore(state => state.updateRecordField);
+  const value = record.values[column.id];
+  const [editing, setEditing] = useState(false);
+  const [localVal, setLocalVal] = useState(value);
 
-  useEffect(() => {
-    setValue(label || field);
-  }, [label, field]);
+  useEffect(() => { setLocalVal(value); }, [value]);
 
-  const handleBlur = () => {
-    setIsEditing(false);
-    if (value.trim() !== (label || field) && value.trim() !== '') {
-      updateColumnLabel(field, value.trim());
-    } else {
-      setValue(label || field);
+  const handleUpdate = (newVal: any) => {
+    if (newVal !== value) {
+      updateRecordField(record.id, column.id, newVal);
     }
+    setEditing(false);
   };
 
-  return (
-    <th className={`p-0 border-r min-w-[${minW}] transition-colors relative group ${
-      isDarkMode ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-100'
-    }`}>
-      {isEditing ? (
-        <input 
-          autoFocus
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          onBlur={handleBlur}
-          onKeyDown={e => e.key === 'Enter' && handleBlur()}
-          className={`w-full h-full min-h-[44px] text-center outline-none px-2 text-brand-500 font-bold ${
-            isDarkMode ? 'bg-[#1a1a24]' : 'bg-white'
-          }`}
-        />
-      ) : (
-        <div 
-          onClick={() => setIsEditing(true)}
-          className="w-full h-full min-h-[44px] px-3 flex items-center justify-center gap-1 cursor-pointer group-hover:text-white"
-        >
-          {label || field}
-          <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity ml-1" />
-          {onDelete && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); onDelete(field); }} 
-              className="absolute top-1 right-1 p-1 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-      )}
-    </th>
-  );
-};
-
-const EditableMainHeader = ({ field }: { field: string }) => {
-  const { isDarkMode } = useTheme();
-  const label = useCampaignStore(state => state.columnLabels[field]);
-  const updateColumnLabel = useCampaignStore(state => state.updateColumnLabel);
-  const [isEditing, setIsEditing] = useState(false);
-  const [value, setValue] = useState(label);
-
-  useEffect(() => { setValue(label); }, [label]);
-
-  const handleBlur = () => {
-    setIsEditing(false);
-    if (value.trim() !== label && value.trim() !== '') {
-      updateColumnLabel(field, value.trim());
-    } else {
-      setValue(label);
-    }
-  };
-
-  return (
-    <th className={`p-0 border-r min-w-[250px] group cursor-pointer transition-colors relative ${
-      isDarkMode ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-100'
-    }`}>
-      {isEditing ? (
-        <input 
-          autoFocus
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          onBlur={handleBlur}
-          onKeyDown={e => e.key === 'Enter' && handleBlur()}
-          className={`w-full h-full min-h-[44px] outline-none px-3 text-brand-500 font-bold ${
-            isDarkMode ? 'bg-[#1a1a24]' : 'bg-white'
-          }`}
-        />
-      ) : (
-        <div onClick={() => setIsEditing(true)} className="w-full h-full min-h-[44px] px-3 flex items-center gap-2 group-hover:text-white">
-          <span className="text-slate-500 font-mono text-[10px] opacity-70">Aa</span> 
-          {label}
-          <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity ml-auto" />
-        </div>
-      )}
-    </th>
-  );
-};
-
-export default function GridEngine() {
-  const { isDarkMode } = useTheme();
-  const { 
-    campaigns, loading, error, initializeProjectData, 
-    addCampaign, updateCampaignField, deleteCampaigns, 
-    columnLabels, columns, addColumn, deleteColumn, activeProjectId 
-  } = useCampaignStore();
-  
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Modals state
-  const [isAddingColumn, setIsAddingColumn] = useState(false);
-  const [newColumnName, setNewColumnName] = useState('');
-  const [columnToDelete, setColumnToDelete] = useState<string | null>(null);
-  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
-
-  useEffect(() => {
-    if (!activeProjectId) return;
-    const unsubscribe = initializeProjectData(activeProjectId);
-    return () => unsubscribe();
-  }, [activeProjectId, initializeProjectData]);
-
-  const toggleSelect = (id: string) => {
-    if (selectedIds.includes(id)) {
-      setSelectedIds(selectedIds.filter(i => i !== id));
-    } else {
-      setSelectedIds([...selectedIds, id]);
-    }
-  };
-
-  const handleDeleteSelected = async () => {
-    setIsDeletingSelected(true);
-  };
-
-  const confirmDeleteSelected = async () => {
-    await deleteCampaigns(selectedIds);
-    setSelectedIds([]);
-    setIsDeletingSelected(false);
-  };
-
-  const getCategoryColor = (cat: string | null) => {
-    switch (cat) {
-      case 'Priority (L)': return 'bg-sky-500/20 text-sky-300 border-sky-500/30';
-      case 'Moderate (M)': return 'bg-teal-500/20 text-teal-300 border-teal-500/30';
-      case 'Tentpole (XL)': return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
-      default: return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
-    }
-  };
-
-  const DataCell = ({ id, field, value, activeColor }: { id: string, field: string, value: any, activeColor: string }) => {
-    const currentLabel = columnLabels[field] || String(field);
-    const [editing, setEditing] = useState(false);
-    const [localVal, setLocalVal] = useState(String(value ?? ''));
-
-    useEffect(() => { setLocalVal(String(value ?? '')); }, [value]);
-
-    // If the stored value is a real boolean, keep checkbox behavior
-    if (typeof value === 'boolean') {
+  // Render by type
+  switch (column.type) {
+    case 'checkbox': {
       return (
-        <td
-          className={`p-0 border-r cursor-pointer transition-colors group/cell relative ${isDarkMode ? 'border-white/5 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-50'}`}
-          onClick={() => updateCampaignField(id, field, !value)}
-        >
-          <div className="flex items-center justify-center h-full min-h-[44px] w-full">
-            {value ? (
-              <Tag colorClass={activeColor}>{currentLabel}</Tag>
-            ) : (
-              <div className="w-4 h-4 rounded border border-white/10 group-hover/cell:border-white/30 transition-colors"></div>
+        <td className="p-0 border-r text-center w-[50px]">
+          <button 
+            onClick={() => handleUpdate(!value)}
+            className={cn(
+              "w-5 h-5 rounded border transition-all flex items-center justify-center mx-auto",
+              value ? "bg-brand-500 border-brand-500 text-white" : "border-slate-500/30 hover:border-brand-500/50"
+            )}
+          >
+            {value && <CheckCircle2 className="w-3.5 h-3.5" />}
+          </button>
+        </td>
+      );
+    }
+
+    case 'select': {
+      const options = column.config?.options || [];
+      const selectedOption = options.find(o => o.label === value);
+      return (
+        <td className="p-0 border-r min-w-[150px] group/select relative">
+          {editing ? (
+            <div className={`absolute top-0 left-0 w-full min-w-[200px] z-[100] p-2 ${isDarkMode ? 'bg-[#1a1a24] shadow-2xl' : 'bg-white shadow-xl border border-slate-200'} rounded-xl border border-white/5`}>
+              <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto custom-scrollbar">
+                {options.map(opt => (
+                  <button 
+                    key={opt.label}
+                    onClick={() => handleUpdate(opt.label)}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/5 text-left text-xs font-bold"
+                  >
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: opt.color }} />
+                    {opt.label}
+                  </button>
+                ))}
+                {options.length === 0 && <span className="p-2 text-[10px] text-slate-500">Sin opciones</span>}
+              </div>
+            </div>
+          ) : (
+            <div 
+              onClick={() => setEditing(true)}
+              className="px-3 min-h-[44px] flex items-center gap-2 cursor-pointer"
+            >
+              {selectedOption ? (
+                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-white" style={{ backgroundColor: selectedOption.color }}>
+                  {selectedOption.label}
+                </span>
+              ) : (
+                <span className="text-slate-500 text-[10px] italic">Sin selección</span>
+              )}
+              <ChevronDown className="w-3 h-3 text-slate-500 opacity-0 group-hover/select:opacity-100 ml-auto" />
+            </div>
+          )}
+        </td>
+      );
+    }
+
+    case 'link': {
+      const links = Array.isArray(value) ? value : (value ? [value] : []);
+      return (
+        <td className="p-0 border-r min-w-[220px] group/link relative">
+          <div className="px-3 min-h-[44px] flex flex-wrap gap-1.5 py-2 items-center">
+            {links.map((link: any, idx: number) => (
+              <div key={idx} className="flex items-center gap-1.5 px-2 py-1 bg-brand-500/10 border border-brand-500/20 rounded-lg text-[10px] font-black text-brand-500">
+                <span className="truncate max-w-[80px]">{link.displayValue}</span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newLinks = links.filter((_: any, i: number) => i !== idx);
+                    updateRecordField(record.id, column.id, newLinks);
+                  }}
+                  className="hover:text-red-500"
+                ><X className="w-2.5 h-2.5" /></button>
+              </div>
+            ))}
+            {links.length === 0 && (
+              <div 
+                onClick={() => setIsLinkingRecord({ recordId: record.id, colId: column.id, targetTableId: column.config?.targetTableId })}
+                className="flex-1 flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-brand-500 transition-all cursor-pointer h-full"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Vincular registro...</span>
+              </div>
+            )}
+            {links.length > 0 && (
+              <button 
+                onClick={() => setIsLinkingRecord({ recordId: record.id, colId: column.id, targetTableId: column.config?.targetTableId })}
+                className="p-1.5 rounded-lg hover:bg-brand-500/10 text-slate-500 hover:text-brand-500 transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {links.length > 0 && (
+              <button 
+                onClick={() => column.config?.targetTableId && useCampaignStore.getState().setActiveTableId(column.config.targetTableId)}
+                className="ml-auto p-1.5 rounded-lg hover:bg-white/5 text-slate-500 opacity-0 group-hover/link:opacity-100 transition-all"
+              >
+                <Maximize2 className="w-3 h-3" />
+              </button>
             )}
           </div>
         </td>
       );
     }
 
-    // All other values: render as editable text
-    return (
-      <td className={`p-0 border-r min-w-[120px] relative group/cell ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-        {editing ? (
-          <input
-            autoFocus
-            value={localVal}
-            onChange={e => setLocalVal(e.target.value)}
-            onBlur={() => { setEditing(false); updateCampaignField(id, field, localVal); }}
-            onKeyDown={e => { if (e.key === 'Enter') { setEditing(false); updateCampaignField(id, field, localVal); } if (e.key === 'Escape') { setEditing(false); setLocalVal(String(value ?? '')); } }}
-            className={`w-full h-full min-h-[44px] absolute inset-0 px-3 text-xs outline-none focus:ring-inset focus:ring-2 focus:ring-brand-500/50 ${isDarkMode ? 'bg-[#1a1a24] text-white' : 'bg-white text-slate-900'}`}
-          />
-        ) : (
-          <div
-            onClick={() => setEditing(true)}
-            className={`min-h-[44px] px-3 flex items-center text-xs cursor-text truncate max-w-[200px] ${
-              localVal
-                ? (isDarkMode ? 'text-slate-200' : 'text-slate-800')
-                : (isDarkMode ? 'text-slate-700' : 'text-slate-400')
-            }`}
-          >
-            {localVal || '—'}
+    case 'date': {
+      return (
+        <td className="p-0 border-r min-w-[140px]">
+          <div className="px-3 min-h-[44px] flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5 text-slate-500" />
+            <input 
+              type="date"
+              value={value || ''}
+              onChange={(e) => handleUpdate(e.target.value)}
+              className="bg-transparent text-xs font-bold outline-none border-none text-slate-400"
+            />
           </div>
-        )}
-      </td>
-    );
-  };
+        </td>
+      );
+    }
 
-  const filteredCampaigns = campaigns.filter(camp => 
-    camp.title?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    camp.category?.toLowerCase().includes(searchQuery.toLowerCase())
-  ).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    case 'attachment': {
+      const attachments = Array.isArray(value) ? value : (value ? [value] : []);
+      const [isUploading, setIsUploading] = useState(false);
 
-  return (
-    <div className={`flex flex-col h-full animate-in fade-in duration-500 relative ${isDarkMode ? 'bg-[#030305]' : 'bg-slate-50'}`}>
+      const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+          const storageRef = ref(storage, `attachments/${record.id}/${file.name}`);
+          await uploadBytes(storageRef, file);
+          const url = await getDownloadURL(storageRef);
+          
+          const newAttachment = {
+            name: file.name,
+            url,
+            type: file.type,
+            size: file.size,
+            storagePath: `attachments/${record.id}/${file.name}`,
+            uploadedAt: Date.now()
+          };
+
+          handleUpdate([...attachments, newAttachment]);
+        } catch (error) {
+          console.error('Error uploading file:', error);
+        } finally {
+          setIsUploading(false);
+        }
+      };
+
+      return (
+        <td className="p-0 border-r min-w-[180px] group/attach relative">
+          <div className="px-3 min-h-[44px] flex flex-wrap gap-1.5 py-2 items-center">
+            {attachments.map((file: any, idx: number) => (
+              <div key={idx} className="flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-slate-400 group/file">
+                {file.type?.includes('pdf') || file.name?.toLowerCase().endsWith('.pdf') ? (
+                  <FileText className="w-3 h-3 text-red-400" />
+                ) : (
+                  <Paperclip className="w-3 h-3" />
+                )}
+                <a href={file.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[80px] hover:text-brand-500 transition-colors">
+                  {file.name}
+                </a>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newFiles = attachments.filter((_: any, i: number) => i !== idx);
+                    handleUpdate(newFiles);
+                  }}
+                  className="hover:text-red-500 opacity-0 group-hover/file:opacity-100 transition-opacity"
+                ><X className="w-2.5 h-2.5" /></button>
+              </div>
+            ))}
+            
+            <label className="cursor-pointer p-1.5 rounded-lg hover:bg-brand-500/10 text-slate-500 hover:text-brand-500 transition-all">
+              {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              <input type="file" className="hidden" onChange={handleFileUpload} />
+            </label>
+          </div>
+        </td>
+      );
+    }
+
+    case 'user': {
+      const activeProjectId = useCampaignStore.getState().activeProjectId;
+      const project = useCampaignStore.getState().projects.find(p => p.id === activeProjectId);
+      const members = project?.memberEmails || [];
+      const allUsers = useCampaignStore.getState().allUsers;
       
-      {/* ADD COLUMN MODAL */}
-      {isAddingColumn && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className={`${isDarkMode ? 'bg-[#13131a] border-white/10' : 'bg-white border-slate-200'} border rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden`}>
-            <div className={`p-6 border-b ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
-              <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Añadir nueva columna</h3>
-              <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Ingresa el nombre para la nueva columna.</p>
-            </div>
-            <div className="p-6">
-              <input 
-                autoFocus
-                value={newColumnName}
-                onChange={e => setNewColumnName(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && newColumnName.trim()) {
-                    addColumn(newColumnName.trim());
-                    setIsAddingColumn(false);
-                    setNewColumnName('');
-                  }
-                }}
-                placeholder="Ej. Social Media, Prioridad..."
-                className={`w-full border rounded-xl px-4 py-3 transition-all outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 ${
-                  isDarkMode ? 'bg-[#0a0a0f] border-white/10 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
-                }`}
-              />
-            </div>
-            <div className={`p-6 flex items-center justify-end gap-3 ${isDarkMode ? 'bg-white/[0.02] border-t border-white/5' : 'bg-slate-50 border-t border-slate-100'}`}>
-              <button 
-                onClick={() => { setIsAddingColumn(false); setNewColumnName(''); }}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  isDarkMode ? 'text-slate-300 hover:text-white hover:bg-white/5' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                }`}
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => {
-                  if (newColumnName.trim()) {
-                    addColumn(newColumnName.trim());
-                    setIsAddingColumn(false);
-                    setNewColumnName('');
-                  }
-                }}
-                disabled={!newColumnName.trim()}
-                className="px-6 py-2 rounded-xl text-sm font-medium bg-brand-500 text-white hover:bg-brand-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-500/20"
-              >
-                Añadir Columna
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      const email = String(value || '').toLowerCase();
+      const userMatch = allUsers.find(u => u.email.toLowerCase() === email);
+      const displayName = userMatch?.displayName || email.split('@')[0] || email;
+      const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-      {/* DELETE COLUMN MODAL */}
-      {columnToDelete && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className={`border rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden ${isDarkMode ? 'bg-[#13131a] border-white/10' : 'bg-white border-slate-200'}`}>
-            <div className={`p-6 border-b flex items-start gap-4 ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
-              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                <Trash2 className="w-5 h-5 text-red-500" />
-              </div>
-              <div>
-                <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Eliminar columna</h3>
-                <p className={`text-sm mt-2 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  ¿Estás seguro de que deseas eliminar la columna <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>"{columnLabels[columnToDelete] || columnToDelete}"</span>? Esta acción no se puede deshacer.
-                </p>
+      return (
+        <td className="p-0 border-r min-w-[180px] group/user relative">
+          {editing ? (
+            <div className={`absolute top-0 left-0 w-full min-w-[240px] z-[100] p-2 ${isDarkMode ? 'bg-[#0f0f15] shadow-[0_20px_50px_rgba(0,0,0,0.5)]' : 'bg-white shadow-2xl border border-slate-200'} rounded-2xl border border-white/5`}>
+              <div className="flex flex-col gap-1 max-h-[280px] overflow-y-auto custom-scrollbar">
+                <button 
+                  onClick={() => handleUpdate('')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-[10px] font-black uppercase tracking-widest transition-all ${
+                    isDarkMode ? 'hover:bg-white/5 text-slate-500 hover:text-white' : 'hover:bg-slate-50 text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  <X className="w-3 h-3" />
+                  Desasignar
+                </button>
+                <div className="h-px bg-white/5 my-1" />
+                {members.map(mEmail => {
+                  const mMatch = allUsers.find(u => u.email.toLowerCase() === mEmail.toLowerCase());
+                  const mName = mMatch?.displayName || mEmail.split('@')[0];
+                  return (
+                    <button 
+                      key={mEmail}
+                      onClick={() => handleUpdate(mEmail)}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
+                        isDarkMode ? 'hover:bg-brand-500/10 hover:text-white' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0 ${hashColor(mEmail, AVATAR_COLORS)}`}>
+                        {mName[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-black truncate">{mName}</p>
+                        <p className="text-[9px] font-bold text-slate-500 truncate">{mEmail}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+                {members.length === 0 && <span className="p-4 text-[10px] text-slate-500 italic text-center">Invita colaboradores al proyecto</span>}
               </div>
             </div>
-            <div className={`p-6 flex items-center justify-end gap-3 ${isDarkMode ? 'bg-white/[0.02] border-t border-white/5' : 'bg-slate-50 border-t border-slate-100'}`}>
-              <button 
-                onClick={() => setColumnToDelete(null)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-white/5' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={async () => {
-                  await deleteColumn(columnToDelete);
-                  setColumnToDelete(null);
-                }}
-                className="px-6 py-2 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20"
-              >
-                Sí, eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DELETE SELECTED REGISTERS MODAL */}
-      {isDeletingSelected && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className={`border rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden ${isDarkMode ? 'bg-[#13131a] border-white/10' : 'bg-white border-slate-200'}`}>
-            <div className={`p-6 border-b flex items-start gap-4 ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
-              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                <Trash2 className="w-5 h-5 text-red-500" />
-              </div>
-              <div>
-                <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Eliminar registros</h3>
-                <p className={`text-sm mt-2 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  ¿Estás seguro de que quieres eliminar <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{selectedIds.length}</span> {selectedIds.length === 1 ? 'registro' : 'registros'}? Esta acción es definitiva.
-                </p>
-              </div>
-            </div>
-            <div className={`p-6 flex items-center justify-end gap-3 ${isDarkMode ? 'bg-white/[0.02] border-t border-white/5' : 'bg-slate-50 border-t border-slate-100'}`}>
-              <button 
-                onClick={() => setIsDeletingSelected(false)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-white/5' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={confirmDeleteSelected}
-                className="px-6 py-2 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20"
-              >
-                Sí, eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="absolute bottom-6 right-6 z-50 bg-red-500 text-white px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
-          <Trash2 className="w-5 h-5" />
-          <p className="text-sm font-medium">{error}</p>
-        </div>
-      )}
-
-      {/* Secondary Navbar */}
-      <div className={`h-14 border-b flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-10 ${
-        isDarkMode ? 'bg-[#0a0a0f]/80 border-white/5' : 'bg-white/80 border-slate-200'
-      }`}>
-        <div className="flex items-center gap-3">
-          <button className={`flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors border ${
-            isDarkMode ? 'text-white bg-white/5 hover:bg-white/10 border-white/5' : 'text-slate-900 bg-white hover:bg-slate-50 border-slate-200'
-          }`}>
-            <LayoutGrid className="w-4 h-4 text-brand-400" />
-            Vista Principal
-            <ArrowUpDown className="w-3 h-3 text-slate-500 ml-1" />
-          </button>
-          
-          <div className="h-4 w-px bg-white/10 mx-1"></div>
-          
-          <button className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg text-xs font-medium transition-colors">
-            <EyeOff className="w-4 h-4" /> 4 Ocultos
-          </button>
-          
-          <button className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg text-xs font-medium transition-colors">
-            <Filter className="w-4 h-4" /> Filtro
-          </button>
-
-          {selectedIds.length > 0 && (
-            <div className="flex items-center animate-in slide-in-from-left-2 fade-in">
-              <div className="h-4 w-px bg-white/10 mx-2"></div>
-              <button 
-                onClick={handleDeleteSelected}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-500/20 transition-colors border border-red-500/20"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Eliminar {selectedIds.length}
-              </button>
+          ) : (
+            <div 
+              onClick={() => setEditing(true)}
+              className="px-3 min-h-[44px] flex items-center cursor-pointer group/pill"
+            >
+              {value ? (
+                <div className={`flex items-center gap-2.5 px-2 py-1 rounded-full border transition-all ${
+                  isDarkMode ? 'bg-white/5 border-white/5 group-hover/pill:bg-white/10' : 'bg-slate-100 border-slate-200 group-hover/pill:bg-slate-200'
+                }`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white shrink-0 shadow-sm ${hashColor(email, AVATAR_COLORS)}`}>
+                    {initials[0]}
+                  </div>
+                  <span className="text-[11px] font-black truncate max-w-[120px]">{displayName}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-slate-600 group-hover/pill:text-brand-500 transition-colors">
+                  <div className={`w-6 h-6 rounded-full border border-dashed flex items-center justify-center transition-colors ${isDarkMode ? 'border-white/10' : 'border-slate-300'}`}>
+                    <User className="w-3 h-3" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-40 group-hover/pill:opacity-100">Asignar...</span>
+                </div>
+              )}
             </div>
           )}
+        </td>
+      );
+    }
+
+    default: // text or unknown
+      return (
+        <td className="p-0 border-r min-w-[200px] relative group/cell">
+          {editing ? (
+            <input
+              autoFocus
+              value={localVal || ''}
+              onChange={e => setLocalVal(e.target.value)}
+              onBlur={() => handleUpdate(localVal)}
+              onKeyDown={e => e.key === 'Enter' && handleUpdate(localVal)}
+              className={`w-full h-full min-h-[44px] absolute inset-0 px-3 text-xs font-bold outline-none border-none ${isDarkMode ? 'bg-brand-500/10 text-white' : 'bg-white text-slate-900 shadow-inner'}`}
+            />
+          ) : (
+            <div
+              onClick={() => setEditing(true)}
+              className="px-3 min-h-[44px] flex items-center text-xs font-bold truncate max-w-[300px]"
+            >
+              {value || <span className="text-slate-700 italic font-normal">Pulsa para editar</span>}
+            </div>
+          )}
+        </td>
+      );
+  }
+};
+
+const HeaderCell = ({ column, setEditingColumn }: { column: ColumnDefinition, setEditingColumn: any }) => {
+  const { isDarkMode } = useTheme();
+  const deleteColumn = useCampaignStore(state => state.deleteColumn);
+  const activeTableId = useCampaignStore(state => state.activeTableId);
+
+  const getIcon = () => {
+    switch (column.type) {
+      case 'checkbox': return <CheckCircle2 className="w-3 h-3" />;
+      case 'date': return <Calendar className="w-3 h-3" />;
+      case 'link': return <Link2 className="w-3 h-3" />;
+      case 'select': return <LayoutGrid className="w-3 h-3" />;
+      case 'user': return <User className="w-3 h-3" />;
+      case 'attachment': return <Paperclip className="w-3 h-3" />;
+      default: return <span className="text-[10px] font-mono">Aa</span>;
+    }
+  };
+
+  return (
+    <th className={cn(
+      "p-0 border-r min-w-[150px] group transition-colors relative h-[44px]",
+      isDarkMode ? "border-white/10 hover:bg-white/5" : "border-slate-200 hover:bg-slate-50"
+    )}>
+      <div className="px-4 flex items-center gap-2.5 text-slate-400 group-hover:text-white transition-colors">
+        <span className="opacity-50">{getIcon()}</span>
+        <span className="text-[11px] font-black uppercase tracking-widest truncate">{column.name}</span>
+        <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+          <button 
+            onClick={() => setEditingColumn(column)}
+            className="p-1 hover:text-brand-500 transition-all"
+          >
+            <Settings className="w-3 h-3" />
+          </button>
+          <button 
+            onClick={() => activeTableId && deleteColumn(activeTableId, column.id)}
+            className="p-1 hover:text-red-500 transition-all"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
         </div>
-        
-        <div className="flex items-center gap-3">
+      </div>
+    </th>
+  );
+};
+
+export default function GridEngine() {
+  const { isDarkMode } = useTheme();
+  const { userData } = useAuth();
+  const { 
+    records, columnDefinitions, loading, error, initializeTableData,
+    activeProjectId, activeTableId, addRecord, addColumn, deleteRecords
+  } = useCampaignStore();
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isAddingCol, setIsAddingCol] = useState(false);
+  const [newColName, setNewColName] = useState('');
+  const [newColType, setNewColType] = useState<ColumnType>('text');
+  
+  // Advanced Column State
+  const [newColOptions, setNewColOptions] = useState<{label: string, color: string}[]>([]);
+  const [targetTableId, setTargetTableId] = useState('');
+  const [isLinkingRecord, setIsLinkingRecord] = useState<{recordId: string, colId: string, targetTableId?: string} | null>(null);
+  const [targetRecords, setTargetRecords] = useState<RecordData[]>([]);
+  const [isFetchingTarget, setIsFetchingTarget] = useState(false);
+  const [editingColumn, setEditingColumn] = useState<ColumnDefinition | null>(null);
+  const [linkSearchQuery, setLinkSearchQuery] = useState('');
+  const [groupBy, setGroupBy] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+  
+  const tables = useCampaignStore(state => state.tables);
+  const activeTable = tables.find(t => t.id === activeTableId);
+
+  useEffect(() => {
+    if (activeTableId) {
+      const unsub = initializeTableData(activeTableId);
+      return unsub;
+    }
+  }, [activeTableId, initializeTableData]);
+
+  if (!activeTable && !loading) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-20 text-slate-500">
+        <div className="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center mb-6">
+          <LayoutGrid className="w-8 h-8 opacity-20" />
+        </div>
+        <h3 className="text-lg font-bold text-white mb-2">Selecciona una tabla</h3>
+        <p className="text-sm max-w-xs text-center opacity-50">Elige una tabla de la barra lateral o crea una nueva para empezar a gestionar tus datos.</p>
+      </div>
+    );
+  }
+
+  useEffect(() => {
+    if (isLinkingRecord?.targetTableId) {
+      console.log('Fetching records for target table:', isLinkingRecord.targetTableId);
+      setIsFetchingTarget(true);
+      useCampaignStore.getState().fetchRecordsByTableId(isLinkingRecord.targetTableId).then(recs => {
+        console.log('Fetched records:', recs.length);
+        setTargetRecords(recs);
+        setIsFetchingTarget(false);
+      });
+    } else if (isLinkingRecord) {
+      console.warn('No targetTableId found for column linking');
+      setTargetRecords([]);
+    }
+  }, [isLinkingRecord]);
+
+  const filteredRecords = records.filter(rec => {
+    if (!rec || !rec.values) return false;
+
+    const values = Object.values(rec.values).map(v => 
+      typeof v === 'object' ? JSON.stringify(v) : String(v)
+    ).join(' ').toLowerCase();
+    return values.includes(searchQuery.toLowerCase());
+  });
+
+  // Grouping Logic
+  const groupedData = useMemo(() => {
+    if (!groupBy) return { 'Sin Agrupar': filteredRecords };
+    
+    const groups: Record<string, RecordData[]> = {};
+    filteredRecords.forEach(rec => {
+      const val = rec.values[groupBy];
+      let groupKey = 'Sin valor';
+      
+      if (val) {
+        if (Array.isArray(val)) {
+          groupKey = val.map(v => v.displayValue || v).join(', ');
+        } else if (typeof val === 'object' && val.displayValue) {
+          groupKey = val.displayValue;
+        } else {
+          groupKey = String(val);
+        }
+      }
+      
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push(rec);
+    });
+    return groups;
+  }, [filteredRecords, groupBy]);
+
+  const filteredTargetRecords = useMemo(() => {
+    if (!isLinkingRecord) return [];
+    return targetRecords.filter(rec => {
+      if (!rec.values) return false;
+      
+      // Search filter
+      const matchesSearch = JSON.stringify(rec.values).toLowerCase().includes(linkSearchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+
+      return true;
+    });
+  }, [targetRecords, linkSearchQuery, userData, isLinkingRecord, tables]);
+
+  if (loading && records.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="w-10 h-10 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex flex-col flex-1 h-full relative overflow-hidden ${isDarkMode ? 'bg-[#030305]' : 'bg-slate-50'}`}>
+      
+      {/* Toolbar */}
+      <div className={`h-14 border-b flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-20 ${
+        isDarkMode ? 'bg-[#0a0a0f]/80 border-white/5' : 'bg-white/80 border-slate-200'
+      }`}>
+        <div className="flex items-center gap-4">
           <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-brand-400 transition-colors" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-brand-500 transition-colors" />
             <input 
-              type="text" 
-              placeholder="Buscar campaña..." 
+              type="text"
+              placeholder="Buscar en esta tabla..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={`border rounded-lg pl-9 pr-4 py-1.5 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 w-64 transition-all ${
-                isDarkMode 
-                  ? 'bg-[#13131a] border-white/10 text-white placeholder-slate-500' 
-                  : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+              onChange={e => setSearchQuery(e.target.value)}
+              className={`pl-10 pr-4 py-2 text-xs font-bold rounded-xl border outline-none transition-all w-[240px] ${
+                isDarkMode ? 'bg-white/5 border-white/5 focus:border-brand-500' : 'bg-slate-100 border-transparent focus:bg-white focus:border-brand-500'
               }`}
             />
           </div>
-          <button className={`p-1.5 rounded-lg transition-colors ${
-            isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-          }`}>
-            <Settings className="w-5 h-5" />
+          
+          {activeTable?.type === 'requests' && (
+            <button 
+              onClick={() => {
+                const url = `${window.location.origin}/form/${activeTableId}`;
+                navigator.clipboard.writeText(url);
+                alert('Enlace del formulario copiado al portapapeles');
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
+            >
+              <Link2 className="w-4 h-4" />
+              COPIAR ENLACE
+            </button>
+          )}
+
+          <button 
+            onClick={() => {
+              if (!activeTableId) return;
+              const initialValues: Record<string, any> = {};
+              if (userData && userData.role !== 'admin') {
+                const userCol = (columnDefinitions || []).find(c => c.type === 'user');
+                if (userCol) initialValues[userCol.id] = userData.email;
+              }
+              addRecord(activeTableId, initialValues);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-brand-600/20 active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            NUEVO REGISTRO
+          </button>
+
+          <div className="flex items-center gap-1 border-l border-white/5 pl-4 ml-2">
+            <div className="relative group/menu">
+              <button 
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all",
+                  groupBy ? "bg-brand-500/10 text-brand-500" : "text-slate-500 hover:bg-white/5 hover:text-white"
+                )}
+              >
+                <Rows className="w-4 h-4" />
+                <span>{groupBy ? `Agrupado por ${(columnDefinitions || []).find(c => c.id === groupBy)?.name}` : 'Agrupar'}</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              
+              <div className="absolute top-full left-0 mt-2 w-48 py-2 rounded-2xl shadow-2xl border border-white/10 bg-[#0a0a0f] opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-50">
+                <button 
+                  onClick={() => setGroupBy(null)}
+                  className="w-full px-4 py-2 text-left text-xs font-bold text-slate-500 hover:bg-white/5 hover:text-white"
+                >
+                  Desactivar grupos
+                </button>
+                <div className="h-px bg-white/5 my-1" />
+                {(columnDefinitions || []).map(col => (
+                  <button 
+                    key={col.id}
+                    onClick={() => setGroupBy(col.id)}
+                    className="w-full px-4 py-2 text-left text-xs font-bold text-white hover:bg-white/5 flex items-center gap-2"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />
+                    {col.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <button 
+              onClick={() => {
+                deleteRecords(selectedIds);
+                setSelectedIds([]);
+              }}
+              className="flex items-center gap-2 px-3 py-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-xs font-bold transition-all"
+            >
+              <Trash2 className="w-4 h-4" />
+              Eliminar {selectedIds.length}
+            </button>
+          )}
+          <button className="p-2.5 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white transition-all">
+            <Settings className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className={`flex-1 overflow-auto p-6 ${isDarkMode ? 'bg-[#0a0a0f]' : 'bg-slate-50'}`}>
-        {loading ? (
-          <div className="h-full flex items-center justify-center flex-col gap-4">
-            <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className={`text-sm animate-pulse ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Cargando base de datos...</p>
-          </div>
-        ) : (
-          <div className={`inline-block min-w-full rounded-xl border overflow-hidden backdrop-blur-xl shadow-2xl pb-12 ${
-            isDarkMode ? 'border-white/5 bg-[#13131a]/50 ring-1 ring-white/10' : 'border-slate-200 bg-white ring-1 ring-slate-100'
-          }`}>
-            <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead className={`text-[11px] uppercase tracking-wider font-semibold border-b sticky top-0 z-10 shadow-sm ${
-                isDarkMode ? 'bg-[#13131a] text-slate-400 border-white/10' : 'bg-slate-50 text-slate-500 border-slate-200'
-              }`}>
-                <tr>
-                  <th className="w-12 p-3 text-center border-r border-white/10">
-                    <input 
-                      type="checkbox" 
-                      onChange={(e) => setSelectedIds(e.target.checked ? filteredCampaigns.map(d => d.id) : [])}
-                      checked={filteredCampaigns.length > 0 && selectedIds.length === filteredCampaigns.length}
-                      className="rounded bg-black/20 border-white/20 text-brand-500 focus:ring-brand-500/50 cursor-pointer accent-brand-500" 
-                    />
-                  </th>
-                  <EditableMainHeader field="title" />
-                  <EditableHeader field="category" minW="140px" />
-                  {columns.map((colId) => (
-                    <EditableHeader key={colId} field={colId} onDelete={setColumnToDelete} />
-                  ))}
-                  <th className={`p-0 border-r min-w-[50px] transition-colors cursor-pointer ${
-                    isDarkMode ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-100'
-                  }`} onClick={() => setIsAddingColumn(true)}>
-                    <div className="flex items-center justify-center w-full h-full text-brand-400">
-                      <Plus className="w-4 h-4" />
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-slate-100'}`}>
-                {filteredCampaigns.map((row, index) => (
-                  <tr 
-                    key={row.id} 
-                    className={cn(
-                      "transition-colors group",
-                      isDarkMode ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-50',
-                      selectedIds.includes(row.id) && (isDarkMode ? "bg-brand-500/[0.05]" : "bg-brand-50")
-                    )}
-                  >
-                    <td className={`p-3 text-center border-r relative ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                      <span className="text-xs text-slate-600 group-hover:opacity-0 transition-opacity">{index + 1}</span>
-                      <input 
-                        type="checkbox" 
-                        className={cn(
-                          "rounded bg-black/50 border-white/20 text-brand-500 focus:ring-brand-500/50 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer accent-brand-500 transition-opacity",
-                          selectedIds.includes(row.id) ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                        )}
-                        checked={selectedIds.includes(row.id)}
-                        onChange={() => toggleSelect(row.id)} 
-                      />
-                    </td>
-                    <td className={`p-0 border-r relative group/input ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                      <input 
-                        type="text"
-                        value={row.title || ''}
-                        onChange={(e) => updateCampaignField(row.id, 'title', e.target.value)}
-                        placeholder="Sin título"
-                        className={`w-full h-full min-h-[44px] bg-transparent px-4 text-sm font-medium focus:outline-none focus:ring-inset focus:ring-2 focus:ring-brand-500/50 transition-all absolute inset-0 rounded-none ${
-                          isDarkMode 
-                            ? 'text-slate-200 placeholder-slate-700 focus:bg-[#1a1a24]' 
-                            : 'text-slate-900 placeholder-slate-400 focus:bg-white'
-                        }`}
-                      />
-                    </td>
-                    <td className={`p-0 border-r relative ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                      <select 
-                        value={row.category || ''}
-                        onChange={(e) => updateCampaignField(row.id, 'category', e.target.value || null)}
-                        className={cn(
-                          "w-full h-full min-h-[44px] bg-transparent text-xs px-3 outline-none cursor-pointer appearance-none absolute inset-0 focus:ring-inset focus:ring-2 focus:ring-brand-500/50 transition-all",
-                          !row.category && (isDarkMode ? "text-slate-600 font-medium" : "text-slate-400 font-medium"),
-                          isDarkMode ? "focus:bg-[#1a1a24] text-slate-200" : "focus:bg-white text-slate-900"
-                        )}
-                      >
-                        <option value="" className={isDarkMode ? "bg-[#0a0a0f] text-slate-400" : "bg-white text-slate-500"}>Seleccionar...</option>
-                        {DEFAULT_CATEGORIES.map(cat => (
-                          <option key={cat} value={cat} className={isDarkMode ? "bg-[#0a0a0f] text-slate-200" : "bg-white text-slate-900"}>{cat}</option>
-                        ))}
-                      </select>
-                      {row.category && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                           <Tag colorClass={getCategoryColor(row.category)}>{row.category.split(' ')[0]}</Tag>
-                        </div>
-                      )}
-                    </td>
-                    
-                    {columns.map((colId, i) => (
-                      <DataCell 
-                        key={colId} 
-                        id={row.id} 
-                        field={colId} 
-                        value={row[colId]} 
-                        activeColor={COLORS[i % COLORS.length]} 
-                      />
-                    ))}
-                    
-                    <td className={`p-0 border-r ${isDarkMode ? 'border-white/5 bg-white/[0.01]' : 'border-slate-200 bg-slate-50/50'}`}></td>
-                  </tr>
-                ))}
-                
-                {filteredCampaigns.length === 0 && searchQuery !== '' ? (
-                  <tr>
-                    <td colSpan={columns.length + 4} className="p-8 text-center text-slate-500 text-sm">
-                      No se encontraron resultados para "{searchQuery}"
-                    </td>
-                  </tr>
-                ) : (
-                  <tr>
-                    <td colSpan={columns.length + 4} className={`p-0 border-r transition-colors ${isDarkMode ? 'border-white/5 bg-brand-500/5 hover:bg-brand-500/10' : 'border-slate-200 bg-brand-50 hover:bg-brand-100'}`}>
+      {/* Grid Container */}
+      <div className="flex-1 overflow-auto custom-scrollbar">
+        <table className="w-full border-collapse">
+          <thead className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0f0f13]' : 'bg-slate-50'}`}>
+            <tr className={`border-b ${isDarkMode ? 'border-white/10' : 'border-slate-200'}`}>
+              <th className="w-[40px] border-r p-0 min-w-[40px]">
+                <div className="flex items-center justify-center">
+                  <div className="w-4 h-4 rounded border border-slate-500/30" />
+                </div>
+              </th>
+              {(columnDefinitions || []).map(col => (
+                <HeaderCell key={col.id} column={col} setEditingColumn={setEditingColumn} />
+              ))}
+              <th className="p-0 min-w-[120px]">
+                <button 
+                  onClick={() => setIsAddingCol(true)}
+                  className="w-full h-[44px] flex items-center justify-center gap-2 text-slate-500 hover:text-brand-500 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Columna</span>
+                </button>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(groupedData).map(([groupKey, groupRecords]) => (
+              <React.Fragment key={groupKey}>
+                {groupBy && (
+                  <tr className={`sticky top-[44px] z-[5] ${isDarkMode ? 'bg-[#0f0f13]' : 'bg-slate-50 shadow-sm'}`}>
+                    <td colSpan={columnDefinitions.length + 2} className={`px-4 py-3 border-b ${isDarkMode ? 'border-white/10' : 'border-slate-200'}`}>
                       <button 
-                        onClick={addCampaign}
-                        className="w-full h-[44px] flex items-center justify-center gap-2 text-sm font-semibold text-brand-400 hover:text-brand-300 transition-colors focus:outline-none"
+                        onClick={() => {
+                          if (collapsedGroups.includes(groupKey)) setCollapsedGroups(collapsedGroups.filter(g => g !== groupKey));
+                          else setCollapsedGroups([...collapsedGroups, groupKey]);
+                        }}
+                        className="flex items-center gap-3 text-[10px] font-black text-slate-500 hover:text-white transition-all group/gbtn"
                       >
-                        <Plus className="w-5 h-5" />
-                        Haz clic aquí para crear una nueva fila
+                        <div className={cn("w-5 h-5 rounded-lg flex items-center justify-center transition-all", 
+                          isDarkMode ? "bg-white/5 group-hover/gbtn:bg-white/10" : "bg-white shadow-sm"
+                        )}>
+                          <ChevronDown className={cn("w-3 h-3 transition-transform duration-300", collapsedGroups.includes(groupKey) && "-rotate-90")} />
+                        </div>
+                        <span className="uppercase tracking-widest flex items-center gap-2">
+                          {groupBy === 'user' ? 'Colaborador:' : ''} {groupKey}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${isDarkMode ? 'bg-white/5 text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
+                          {groupRecords.length} REGISTROS
+                        </span>
                       </button>
                     </td>
                   </tr>
                 )}
-              </tbody>
-            </table>
+                {!collapsedGroups.includes(groupKey) && (
+                  <>
+                    <AnimatePresence>
+                      {groupRecords.map((rec) => (
+                        <motion.tr 
+                          key={rec.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className={`border-b transition-colors group ${
+                            isDarkMode ? 'border-white/5 hover:bg-white/[0.02]' : 'border-slate-100 hover:bg-slate-50'
+                          }`}
+                        >
+                          <td className="w-[40px] border-r p-0 text-center">
+                            <div className="flex items-center justify-center">
+                              <input 
+                                type="checkbox"
+                                checked={selectedIds.includes(rec.id)}
+                                onChange={() => {
+                                  if (selectedIds.includes(rec.id)) setSelectedIds(selectedIds.filter(i => i !== rec.id));
+                                  else setSelectedIds([...selectedIds, rec.id]);
+                                }}
+                                className="accent-brand-500"
+                              />
+                            </div>
+                          </td>
+                          {(columnDefinitions || []).map(col => (
+                            <DynamicCell key={col.id} record={rec} column={col} setIsLinkingRecord={setIsLinkingRecord} />
+                          ))}
+                          <td className="p-0 border-r" />
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
+                    
+                    {/* Add row per group if grouped, or at bottom if not */}
+                    {groupBy && (
+                      <tr 
+                        onClick={() => {
+                          if (!activeTableId) return;
+                          const initialValues: Record<string, any> = groupBy ? { [groupBy]: groupKey } : {};
+                          if (userData && userData.role !== 'admin') {
+                            const userCol = (columnDefinitions || []).find(c => c.type === 'user');
+                            if (userCol) initialValues[userCol.id] = userData.email;
+                          }
+                          addRecord(activeTableId, initialValues);
+                        }}
+                        className={`transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-100/50'}`}
+                      >
+                        <td className="border-r p-0" />
+                        <td colSpan={columnDefinitions.length + 1} className="px-4 py-3">
+                          <div className="flex items-center gap-3 text-[10px] font-black text-slate-600 hover:text-brand-500 transition-colors uppercase tracking-widest">
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Añadir registro a "{groupKey}"</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )}
+              </React.Fragment>
+            ))}
+
+            {/* Global add row at the very bottom if not grouped */}
+            {!groupBy && filteredRecords.length > 0 && (
+              <tr 
+                onClick={() => {
+                  if (!activeTableId) return;
+                  const initialValues: Record<string, any> = {};
+                  if (userData && userData.role !== 'admin') {
+                    const userCol = (columnDefinitions || []).find(c => c.type === 'user');
+                    if (userCol) initialValues[userCol.id] = userData.email;
+                  }
+                  addRecord(activeTableId, initialValues);
+                }}
+                className={`transition-colors cursor-pointer border-b ${isDarkMode ? 'hover:bg-white/[0.03] border-white/5' : 'hover:bg-slate-100/50 border-slate-100'}`}
+              >
+                <td className="border-r p-0 h-[44px]" />
+                <td colSpan={columnDefinitions.length + 1} className="px-4 py-3">
+                  <div className="flex items-center gap-3 text-[10px] font-black text-slate-600 hover:text-brand-500 transition-colors uppercase tracking-widest">
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Haga clic para añadir una nueva fila</span>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {filteredRecords.length === 0 && (
+          <div className="p-20 text-center flex flex-col items-center gap-4">
+            <LayoutGrid className="w-12 h-12 text-slate-700 opacity-20" />
+            <p className="text-slate-500 text-sm font-medium">No hay registros en esta vista.</p>
+            <button 
+              onClick={() => {
+                if (!activeTableId) return;
+                const initialValues: Record<string, any> = {};
+                if (userData && userData.role !== 'admin') {
+                  const userCol = (columnDefinitions || []).find(c => c.type === 'user');
+                  if (userCol) initialValues[userCol.id] = userData.email;
+                }
+                addRecord(activeTableId, initialValues);
+              }}
+              className="text-brand-500 text-xs font-bold hover:underline"
+            >
+              Crear el primer registro
+            </button>
           </div>
         )}
-        
-        <div className="flex justify-between items-center mt-6 px-2 text-xs font-medium text-slate-500">
-          <div className="flex items-center gap-4">
-            <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-2">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              Sincronizado
-            </span>
-            <span>{filteredCampaigns.length} registros</span>
-          </div>
+      </div>
+
+      {/* Footer Info */}
+      <div className={`h-8 border-t px-4 flex items-center justify-between text-[10px] font-bold text-slate-500 ${isDarkMode ? 'bg-[#0a0a0f] border-white/5' : 'bg-slate-50 border-slate-200'}`}>
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1.5">
+            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+            Sincronizado con Firestore
+          </span>
+          <span>{filteredRecords.length} registros</span>
+        </div>
+        <div>
+          Workspace ID: {activeProjectId}
         </div>
       </div>
+      {/* Record Picker Modal for Links */}
+      <AnimatePresence>
+        {isLinkingRecord && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsLinkingRecord(null)} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className={`relative w-full max-w-2xl rounded-3xl overflow-hidden border ${isDarkMode ? 'bg-[#0f0f15] border-white/10' : 'bg-white border-slate-200 shadow-2xl'}`}>
+              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tighter">Vincular Registro</h3>
+                  <p className="text-xs text-slate-500">
+                    {isLinkingRecord.targetTableId 
+                      ? <>Tabla destino: <span className="text-brand-500 font-bold">{tables.find(t => t.id === isLinkingRecord.targetTableId)?.name || 'Desconocida'}</span></>
+                      : <span className="text-red-500 font-bold">Error: Esta columna no tiene una tabla destino configurada.</span>
+                    }
+                  </p>
+                </div>
+                <button onClick={() => setIsLinkingRecord(null)} className="p-2 rounded-xl hover:bg-white/5 text-slate-500"><X className="w-5 h-5" /></button>
+              </div>
+              
+              <div className="px-6 py-4 border-b border-white/5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input 
+                    type="text"
+                    placeholder="Buscar registro..."
+                    value={linkSearchQuery}
+                    onChange={e => setLinkSearchQuery(e.target.value)}
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs font-bold outline-none border transition-all ${isDarkMode ? 'bg-white/5 border-white/5 focus:border-brand-500' : 'bg-slate-100 border-transparent focus:bg-white focus:border-brand-500'}`}
+                  />
+                </div>
+              </div>
+
+              <div className="p-6 max-h-[400px] overflow-y-auto space-y-2 custom-scrollbar">
+                {isFetchingTarget ? (
+                  <div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-brand-500" /></div>
+                ) : (
+                  <>
+                    <button 
+                      onClick={async () => {
+                        if (isLinkingRecord.targetTableId) {
+                          const initialValues: Record<string, any> = {};
+                          if (userData && userData.role !== 'admin') {
+                            const targetTable = tables.find(t => t.id === isLinkingRecord.targetTableId);
+                            const userCol = (targetTable?.columnDefinitions || []).find(c => c.type === 'user');
+                            if (userCol) initialValues[userCol.id] = userData.email;
+                          }
+                          await useCampaignStore.getState().addRecord(isLinkingRecord.targetTableId, initialValues);
+                          // Refresh target records
+                          const recs = await useCampaignStore.getState().fetchRecordsByTableId(isLinkingRecord.targetTableId);
+                          setTargetRecords(recs);
+                        }
+                      }}
+                      className="w-full p-4 mb-4 rounded-2xl border border-dashed border-brand-500/30 text-brand-500 text-xs font-black hover:bg-brand-500/5 transition-all"
+                    >
+                      + CREAR NUEVO REGISTRO EN ESTA TABLA
+                    </button>
+                    
+                    <div className="space-y-2">
+                      {filteredTargetRecords.map(rec => {
+                          if (!rec.values) return null;
+                          const displayVal = rec.values.title || Object.values(rec.values).find(v => typeof v === 'string' && v.length > 0) || 'Registro sin título';
+                          return (
+                            <button 
+                              key={rec.id}
+                              onClick={() => {
+                                const sourceRecord = useCampaignStore.getState().records.find(r => r.id === isLinkingRecord.recordId);
+                                if (!sourceRecord) return;
+
+                                const currentLinks = Array.isArray(sourceRecord.values[isLinkingRecord.colId]) ? sourceRecord.values[isLinkingRecord.colId] : [];
+                                if (!currentLinks.find((l: any) => l.id === rec.id)) {
+                                  useCampaignStore.getState().updateRecordField(isLinkingRecord.recordId, isLinkingRecord.colId, [
+                                    ...currentLinks,
+                                    { id: rec.id, displayValue: displayVal }
+                                  ]);
+                                }
+                                setIsLinkingRecord(null);
+                                setLinkSearchQuery('');
+                              }}
+                              className={`w-full p-5 rounded-[24px] border text-left transition-all ${isDarkMode ? 'bg-white/[0.03] border-white/5 hover:border-brand-500 hover:bg-brand-500/10' : 'bg-slate-50 border-slate-200 hover:border-brand-500'}`}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-brand-500/20 flex items-center justify-center text-brand-500 font-black text-lg shadow-inner">{initials(String(displayVal))}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-black text-white truncate">{String(displayVal)}</div>
+                                  <div className="flex flex-wrap gap-2 mt-1">
+                                    {Object.entries(rec.values).slice(0, 3).map(([k, v]) => (
+                                      k !== 'title' && typeof v === 'string' && v.length > 0 && (
+                                        <span key={k} className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-slate-500 font-bold truncate max-w-[100px]">
+                                          {v}
+                                        </span>
+                                      )
+                                    ))}
+                                    <span className="text-[9px] text-slate-600 font-mono uppercase tracking-widest">{rec.id.slice(-6)}</span>
+                                  </div>
+                                </div>
+                                <div className="w-8 h-8 rounded-full border border-white/5 flex items-center justify-center text-slate-500 group-hover:text-brand-500">
+                                  <Plus className="w-4 h-4" />
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      {targetRecords.filter(r => JSON.stringify(r.values).toLowerCase().includes(linkSearchQuery.toLowerCase())).length === 0 && (
+                        <div className="text-center p-10 text-slate-500 text-sm italic">No se encontraron registros que coincidan.</div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Column Modal Overlay - ENHANCED */}
+      <AnimatePresence>
+        {isAddingCol && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsAddingCol(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className={`relative w-full max-w-md rounded-[32px] p-8 shadow-2xl border ${isDarkMode ? 'bg-[#1a1a23] border-white/10' : 'bg-white border-slate-200'}`}
+            >
+              <h3 className={`text-xl font-black mb-6 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>NUEVA COLUMNA</h3>
+              <div className="space-y-5">
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Nombre</label>
+                  <input 
+                    autoFocus
+                    value={newColName}
+                    onChange={e => setNewColName(e.target.value)}
+                    placeholder="Ej. Estatus, Prioridad..."
+                    className={`w-full px-4 py-3.5 rounded-2xl text-xs font-bold border outline-none transition-all ${isDarkMode ? 'bg-black border-white/10 focus:border-brand-500' : 'bg-slate-50 border-slate-200 focus:border-brand-500'}`}
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Tipo de dato</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['text', 'select', 'date', 'checkbox', 'link', 'user', 'attachment'] as ColumnType[]).map(t => (
+                      <button 
+                        key={t}
+                        onClick={() => {
+                          setNewColType(t);
+                          if (t === 'select') {
+                            setNewColOptions([
+                              {label: 'En proceso', color: '#3b82f6'},
+                              {label: 'Pausado', color: '#f59e0b'},
+                              {label: 'Terminado', color: '#10b981'}
+                            ]);
+                          }
+                        }}
+                        className={cn(
+                          "px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all",
+                          newColType === t 
+                            ? "bg-brand-500 border-brand-500 text-white shadow-lg" 
+                            : isDarkMode ? "border-white/5 text-slate-500 hover:border-brand-500/30" : "border-slate-200 text-slate-500 hover:border-brand-500/30"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {newColType === 'select' && (
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Configurar Estados</label>
+                    <div className="space-y-2">
+                      {newColOptions.map((opt, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded-full" style={{backgroundColor: opt.color}} />
+                          <input 
+                            value={opt.label}
+                            onChange={(e) => {
+                              const newOpts = [...newColOptions];
+                              newOpts[idx].label = e.target.value;
+                              setNewColOptions(newOpts);
+                            }}
+                            className="bg-transparent text-[11px] font-bold text-white outline-none flex-1"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {newColType === 'link' && (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Tabla Destino</label>
+                    <select 
+                      value={targetTableId}
+                      onChange={e => setTargetTableId(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl text-xs font-bold border outline-none ${isDarkMode ? 'bg-black border-white/10' : 'bg-slate-50 border-slate-200'}`}
+                    >
+                      <option value="">Selecciona una tabla...</option>
+                      {tables.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="pt-4 flex gap-3">
+                  <button onClick={() => setIsAddingCol(false)} className="flex-1 py-3.5 text-xs font-black text-slate-500 hover:text-white transition-colors">CANCELAR</button>
+                  <button 
+                    onClick={() => {
+                      if (newColName && activeTableId) {
+                        const config = newColType === 'select' ? { options: newColOptions } : 
+                                      newColType === 'link' ? { targetTableId } : {};
+                        addColumn(activeTableId, newColName, newColType, config);
+                        setIsAddingCol(false);
+                        setNewColName('');
+                      }
+                    }}
+                    className="flex-1 py-3.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-black rounded-2xl transition-all shadow-xl active:scale-95"
+                  >
+                    CREAR COLUMNA
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Column Modal */}
+      <AnimatePresence>
+        {editingColumn && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setEditingColumn(null)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className={`relative w-full max-w-sm rounded-[32px] p-8 shadow-2xl border ${isDarkMode ? 'bg-[#1a1a23] border-white/10' : 'bg-white border-slate-200'}`}>
+              <h3 className={`text-xl font-black mb-6 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>EDITAR COLUMNA</h3>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400">Nombre de la columna</label>
+                  <input
+                    value={editingColumn.name}
+                    onChange={(e) => setEditingColumn({ ...editingColumn, name: e.target.value })}
+                    className={`w-full p-3 rounded-xl text-sm font-bold border outline-none transition-all ${isDarkMode ? 'bg-white/5 border-white/10 focus:border-brand-500 text-white' : 'bg-slate-50 border-slate-200 focus:border-brand-500 text-slate-900'}`}
+                  />
+                </div>
+                
+                {editingColumn.type === 'select' && (
+                  <div className="space-y-2 mt-4">
+                    <label className="text-xs font-bold text-slate-400">Opciones de Selección</label>
+                    {(editingColumn.config?.options || []).map((opt: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2 bg-white/5 p-2 rounded-xl border border-white/5">
+                        <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: opt.color }} />
+                        <input 
+                          value={opt.label}
+                          onChange={(e) => {
+                            const newOpts = [...(editingColumn.config?.options || [])];
+                            newOpts[idx].label = e.target.value;
+                            setEditingColumn({ ...editingColumn, config: { ...editingColumn.config, options: newOpts } });
+                          }}
+                          className="bg-transparent text-xs font-bold text-white outline-none flex-1"
+                        />
+                        <button 
+                          onClick={() => {
+                            const newOpts = (editingColumn.config?.options || []).filter((_: any, i: number) => i !== idx);
+                            setEditingColumn({ ...editingColumn, config: { ...editingColumn.config, options: newOpts } });
+                          }}
+                          className="text-red-500 p-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <button 
+                      onClick={() => {
+                        const newOpts = [...(editingColumn.config?.options || []), { label: 'Nueva Opción', color: '#6366f1' }];
+                        setEditingColumn({ ...editingColumn, config: { ...editingColumn.config, options: newOpts } });
+                      }}
+                      className="w-full mt-2 py-2 border border-dashed border-slate-700 rounded-xl text-[10px] font-black text-slate-500 hover:text-white"
+                    >
+                      + AÑADIR OPCIÓN
+                    </button>
+                  </div>
+                )}
+                
+                <div className="pt-4 flex gap-3">
+                  <button onClick={() => setEditingColumn(null)} className="flex-1 py-3.5 text-xs font-black text-slate-500">CANCELAR</button>
+                  <button 
+                    onClick={() => {
+                      if (activeTableId) {
+                        useCampaignStore.getState().updateColumn(activeTableId, editingColumn.id, { 
+                          name: editingColumn.name,
+                          config: editingColumn.config 
+                        });
+                        setEditingColumn(null);
+                      }
+                    }}
+                    className="flex-1 py-3.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-black rounded-2xl shadow-xl"
+                  >
+                    GUARDAR
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

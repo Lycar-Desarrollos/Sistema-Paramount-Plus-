@@ -3,6 +3,7 @@ import { X, Camera, Save, Loader2, User } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from './Toast';
 
 interface Props {
   user: any;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function ProfileModal({ user, userData, onClose }: Props) {
+  const { showToast } = useToast();
   const { isDarkMode } = useTheme();
   const [displayName, setDisplayName] = useState(userData?.displayName || user?.displayName || '');
   const [description, setDescription] = useState(userData?.description || '');
@@ -72,10 +74,11 @@ export default function ProfileModal({ user, userData, onClose }: Props) {
         ...(finalPhotoUrl && { photoURL: finalPhotoUrl })
       });
 
+      showToast("Perfil actualizado correctamente", "success");
       onClose();
     } catch (error) {
       console.error("Error updating profile:", error);
-      alert("Error al actualizar el perfil.");
+      showToast("Error al actualizar el perfil.", "error");
     } finally {
       setLoading(false);
     }

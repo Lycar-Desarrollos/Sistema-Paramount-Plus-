@@ -52,17 +52,20 @@ export default function AIChat({ onClose, userData }: AIChatProps) {
     setInput('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    // Use the real AI logic service
+    import('../services/aiLogic').then(async ({ processAIMessage }) => {
+      const response = await processAIMessage(input.trim());
+      
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'ai',
-        text: 'Entendido. Estoy analizando tu solicitud en el contexto de tu base de datos. Como agente de IA, puedo automatizar esta tarea o generar una vista personalizada. ¿Deseas que proceda?',
+        text: response.text,
         timestamp: new Date()
       };
+      
       setMessages(prev => [...prev, aiMessage]);
       setIsTyping(false);
-    }, 1500);
+    });
   };
 
   return (
