@@ -23,7 +23,6 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
   const { showToast } = useToast();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { isAiOpen, setIsAiOpen } = useCampaignStore();
-  const [members, setMembers] = useState<TeamMember[]>([]);
   const [displayName, setDisplayName] = useState(userData?.displayName || user?.displayName || '');
   const [description, setDescription] = useState(userData?.description || '');
   const [loading, setLoading] = useState(false);

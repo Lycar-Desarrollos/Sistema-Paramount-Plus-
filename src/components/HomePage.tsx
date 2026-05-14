@@ -48,8 +48,6 @@ export default function HomePage({
   isProMode
 }: HomePageProps) {
   const { isDarkMode, toggleDarkMode } = useTheme();
-  const { isAiOpen, setIsAiOpen } = useCampaignStore();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     localStorage.getItem('natic_selected_project') || null
   );
@@ -75,7 +73,7 @@ export default function HomePage({
   const [inlineMemberEmail, setInlineMemberEmail] = useState('');
   const [inlineAddingMember, setInlineAddingMember] = useState(false);
 
-  const { toggleFavoriteProject, isSidebarCollapsed, setIsSidebarCollapsed, setActiveProjectId, allUsers } = useCampaignStore();
+  const { isAiOpen, setIsAiOpen, toggleFavoriteProject, isSidebarCollapsed, setIsSidebarCollapsed, setActiveProjectId, allUsers } = useCampaignStore();
 
   const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
