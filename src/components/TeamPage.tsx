@@ -7,6 +7,8 @@ import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 
 import { db, firebaseConfig } from '../firebase';
 import type { UserRole } from '../context/AuthContext';
 import { UserMenu } from './UserMenu';
+import ManageTeamModal from './ManageTeamModal';
+import AIChat from './AIChat';
 import { useTheme } from '../context/ThemeContext';
 import { useCampaignStore } from '../store/useCampaignStore';
 import { uploadToCloudinary, getCloudinaryThumbnail } from '../services/cloudinary';

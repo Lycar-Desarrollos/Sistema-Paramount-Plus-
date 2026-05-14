@@ -8,6 +8,8 @@ import { useCampaignStore } from '../store/useCampaignStore';
 import { Sparkles } from 'lucide-react';
 import { useToast } from './Toast';
 import { uploadToCloudinary, getCloudinaryThumbnail } from '../services/cloudinary';
+import AIChat from './AIChat';
+import UserMenu from './UserMenu';
 
 interface Props {
   user: any;
@@ -87,40 +89,23 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
         </div>
         
         <div className="flex items-center gap-4">
-          <motion.div 
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className={`flex items-center gap-3 px-3 py-1.5 rounded-full border transition-all relative overflow-hidden ${
-              isProMode 
-                ? (isDarkMode ? 'border-brand-500/50 bg-brand-500/10 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'border-brand-200 bg-brand-50 shadow-sm')
-                : (isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm')
-            }`}
-          >
-            {isProMode && (
-              <motion.div 
-                layoutId="ai-glow-account"
-                className="absolute inset-0 bg-gradient-to-r from-brand-500/20 to-pink-500/20 blur-md"
-                animate={{ opacity: [0.3, 0.6, 0.3] }}
-                transition={{ repeat: Infinity, duration: 2 }}
-              />
-            )}
-            <div className="flex items-center gap-1.5 relative z-10">
-              <Sparkles className={`w-3.5 h-3.5 transition-colors ${isProMode ? 'text-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`} />
-              <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isProMode ? 'text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
-                PRO IA
+          {userData?.role === 'admin' && (
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                Notificaciones
               </span>
+              <button 
+                onClick={() => useCampaignStore.getState().setIsAiOpen(!useCampaignStore.getState().isAiOpen)}
+                className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${useCampaignStore.getState().isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
+              >
+                <motion.span 
+                  animate={{ x: useCampaignStore.getState().isAiOpen ? 16 : 2 }}
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
+                />
+              </button>
             </div>
-            <button 
-              onClick={() => onToggleProMode()}
-              className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors z-10 ${isProMode ? 'bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
-            >
-              <motion.span 
-                animate={{ x: isProMode ? 16 : 2 }}
-                className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
-              />
-            </button>
-          </motion.div>
-
+          )}
+          
           <button
             onClick={toggleDarkMode}
           className={`p-2 rounded-full transition-colors ${isDarkMode ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'}`}
@@ -128,6 +113,7 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
         >
             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
+          <UserMenu user={user} userData={userData} onManageAccount={() => {}} onManageTeam={() => {}} />
         </div>
       </header>
 
@@ -241,6 +227,8 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
 
         </div>
       </main>
+
+      <AIChat />
     </div>
   );
 }

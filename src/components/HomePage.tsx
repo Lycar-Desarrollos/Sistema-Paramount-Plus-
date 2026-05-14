@@ -8,6 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { UserMenu } from './UserMenu';
 import ProjectSettingsModal from './ProjectSettingsModal';
 import Dashboard from './Dashboard';
+import AIChat from './AIChat';
 
 interface HomePageProps {
   user: any;
@@ -889,20 +890,22 @@ export default function HomePage({
           
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className={`flex items-center gap-3 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className={`w-3.5 h-3.5 transition-colors ${isProMode ? 'text-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`} />
-                  <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isProMode ? 'text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
-                    PRO IA
+              {userData?.role === 'admin' && (
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white shadow-sm'}`}>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Notificaciones
                   </span>
+                  <button 
+                    onClick={() => useCampaignStore.getState().setIsAiOpen(!useCampaignStore.getState().isAiOpen)}
+                    className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${useCampaignStore.getState().isAiOpen ? 'bg-emerald-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
+                  >
+                    <motion.span 
+                      animate={{ x: useCampaignStore.getState().isAiOpen ? 16 : 2 }}
+                      className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform`} 
+                    />
+                  </button>
                 </div>
-                <button 
-                  onClick={() => onToggleProMode()}
-                  className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${isProMode ? 'bg-gradient-to-r from-brand-500 to-pink-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
-                >
-                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${isProMode ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                </button>
-              </div>
+              )}
               
               <button
                 onClick={toggleDarkMode}
