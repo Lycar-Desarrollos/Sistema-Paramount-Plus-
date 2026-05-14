@@ -29,7 +29,7 @@ export interface Project {
   members?: Record<string, UserRole | 'owner'>;
 }
 
-export type ColumnType = 'text' | 'number' | 'select' | 'date' | 'checkbox' | 'link' | 'user' | 'attachment';
+export type ColumnType = 'text' | 'number' | 'select' | 'date' | 'checkbox' | 'link' | 'user' | 'attachment' | 'phone' | 'email';
 
 export interface ColumnDefinition {
   id: string;
