@@ -197,7 +197,9 @@ interface CampaignStore {
   setAiLoadingText: (val: string) => void;
   triggerAiSimulation: (textSequence?: string[], duration?: number) => Promise<void>;
   isAiOpen: boolean;
-  setIsAiOpen: (val: boolean) => void;
+  setIsAiOpen: (open: boolean) => void;
+  detailRecord: RecordData | null;
+  setDetailRecord: (record: RecordData | null) => void;
   aiWindowState: 'open' | 'minimized';
   setAiWindowState: (val: 'open' | 'minimized') => void;
   chatMessages: { role: 'user' | 'ai'; content: string }[];
@@ -942,7 +944,9 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     }
   },
   isAiOpen: false,
-  setIsAiOpen: (val: boolean) => set({ isAiOpen: val }),
+  setIsAiOpen: (open) => set({ isAiOpen: open }),
+  detailRecord: null,
+  setDetailRecord: (record) => set({ detailRecord: record }),
   aiWindowState: 'open',
   setAiWindowState: (val: 'open' | 'minimized') => set({ aiWindowState: val }),
   chatMessages: [],

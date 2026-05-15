@@ -15,6 +15,7 @@ export default function KanbanEngine({ tableId }: KanbanEngineProps) {
   const table = tables.find(t => t.id === tableId);
   const records = useCampaignStore(state => state.records.filter((r: any) => r.tableId === tableId));
   const updateRecordField = useCampaignStore(state => state.updateRecordField);
+  const setDetailRecord = useCampaignStore(state => state.setDetailRecord);
   
   const [draggedRecordId, setDraggedRecordId] = useState<string | null>(null);
 
@@ -43,6 +44,13 @@ export default function KanbanEngine({ tableId }: KanbanEngineProps) {
     }
     return groups;
   }, [records, columns, statusCol]);
+
+  // Try to find helper columns for card UI
+  const titleCol = useMemo(() => table?.columnDefinitions.find(c => c.id === 'title' || c.id === 'name' || c.name.toLowerCase().includes('título')), [table]);
+  const dateCol = useMemo(() => table?.columnDefinitions.find(c => c.type === 'date'), [table]);
+  const userCol = useMemo(() => table?.columnDefinitions.find(c => c.type === 'user' || c.type === 'email'), [table]);
+  const priorityCol = useMemo(() => table?.columnDefinitions.find(c => c.name.toLowerCase().includes('prioridad') || c.id.toLowerCase().includes('priority')), [table]);
+
 
   if (!statusCol) {
     return (
@@ -113,58 +121,84 @@ export default function KanbanEngine({ tableId }: KanbanEngineProps) {
                   draggable
                   onDragStart={(e: any) => handleDragStart(e, record.id)}
                   onDragEnd={(e: any) => setDraggedRecordId(null)}
+                  onClick={() => setDetailRecord(record)}
                   className={cn(
-                    "group relative p-5 rounded-[24px] border cursor-grab active:cursor-grabbing transition-all duration-300",
+                    "group relative p-4 rounded-2xl border cursor-grab active:cursor-grabbing transition-all duration-300",
                     isDarkMode 
-                      ? "bg-[#13131a] border-white/5 hover:border-brand-500/30 hover:shadow-2xl hover:shadow-brand-500/10" 
-                      : "bg-white border-slate-200 hover:border-brand-500 shadow-sm hover:shadow-xl"
+                      ? "bg-[#181824]/80 backdrop-blur-md border-white/10 hover:border-brand-500/50 hover:shadow-2xl hover:shadow-brand-500/20 hover:-translate-y-1" 
+                      : "bg-white border-slate-200 hover:border-brand-500 shadow-sm hover:shadow-xl hover:-translate-y-1"
                   )}
                 >
-                  {/* Card Content */}
-                  <div className="flex flex-col gap-3">
-                    {/* Folio / Tags */}
+                  {/* Hover Glow Effect */}
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-brand-500/0 via-brand-500/0 to-brand-500/0 group-hover:from-brand-500/5 group-hover:to-purple-500/5 transition-all pointer-events-none" />
+
+                  <div className="flex flex-col gap-3 relative z-10">
+                    {/* Priority & More */}
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-brand-500 uppercase tracking-widest bg-brand-500/10 px-2.5 py-1 rounded-full">
-                        {record.values.folio || record.id.slice(-6)}
-                      </span>
-                      <button className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-white/5 text-slate-500 transition-all">
-                        <MoreHorizontal className="w-3.5 h-3.5" />
+                      {priorityCol && record.values[priorityCol.id] ? (
+                        <span className={cn(
+                          "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md",
+                          String(record.values[priorityCol.id]).toLowerCase().includes('alta') || String(record.values[priorityCol.id]).toLowerCase().includes('high')
+                            ? "bg-red-500/10 text-red-500" 
+                            : "bg-slate-500/10 text-slate-500"
+                        )}>
+                          {String(record.values[priorityCol.id])}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/5">
+                          {record.values.folio || record.id.slice(-6)}
+                        </span>
+                      )}
+                      <button className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 transition-all">
+                        <MoreHorizontal className="w-4 h-4" />
                       </button>
                     </div>
 
                     {/* Title */}
-                    <h5 className={`text-sm font-bold leading-tight line-clamp-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                      {record.values.title || record.values.name || 'Sin título'}
+                    <h5 className={cn(
+                      "text-sm font-bold leading-snug line-clamp-2",
+                      isDarkMode ? 'text-slate-100' : 'text-slate-800'
+                    )}>
+                      {titleCol && record.values[titleCol.id] ? record.values[titleCol.id] : (record.values.title || record.values.name || 'Sin título')}
                     </h5>
 
-                    {/* Meta Info */}
-                    <div className="flex items-center gap-3 mt-1">
-                      {record.values.email && (
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
-                          <User className="w-3 h-3" />
-                          <span className="truncate max-w-[120px]">{record.values.email}</span>
-                        </div>
-                      )}
-                      {record.values.date && (
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
-                          <Calendar className="w-3 h-3" />
-                          <span>{new Date(record.values.date).toLocaleDateString()}</span>
+                    {/* Tags / Sub-info */}
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      {dateCol && record.values[dateCol.id] && (
+                        <div className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold",
+                          new Date(record.values[dateCol.id]) < new Date() 
+                            ? "bg-red-500/10 text-red-500" // Overdue
+                            : (isDarkMode ? "bg-white/5 text-slate-400" : "bg-slate-50 text-slate-500")
+                        )}>
+                          <Clock className="w-3 h-3" />
+                          {new Date(record.values[dateCol.id]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                         </div>
                       )}
                     </div>
 
-                    {/* Footer */}
-                    <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/5">
-                      <div className="flex -space-x-2">
-                        {/* Placeholder for members if any */}
-                        <div className={cn("w-6 h-6 rounded-full border-2 border-[#13131a] flex items-center justify-center text-[8px] font-black text-white", hashColor(record.id, AVATAR_COLORS))}>
-                          {record.values.email?.charAt(0).toUpperCase() || 'U'}
-                        </div>
+                    {/* Footer: Assignee & Action */}
+                    <div className="flex items-center justify-between mt-2 pt-3 border-t border-slate-100 dark:border-white/5">
+                      <div className="flex items-center gap-2">
+                        {userCol && record.values[userCol.id] ? (
+                          <div className="flex items-center gap-2">
+                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm", hashColor(record.id, AVATAR_COLORS))}>
+                              {String(record.values[userCol.id]).charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-500 truncate max-w-[80px]">
+                              {String(record.values[userCol.id]).split('@')[0]}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 rounded-full border border-dashed border-slate-300 dark:border-white/20 flex items-center justify-center text-slate-400">
+                            <User className="w-3 h-3" />
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
-                         <div className={`p-1.5 rounded-lg ${isDarkMode ? 'bg-white/5 text-slate-500' : 'bg-slate-50 text-slate-400'}`}>
-                           <Maximize2 className="w-3 h-3" />
-                         </div>
+                        <div className={`p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white hover:bg-brand-500/20 hover:text-brand-400' : 'bg-slate-50 text-slate-400 hover:bg-brand-50 hover:text-brand-500'}`}>
+                          <Maximize2 className="w-3 h-3" />
+                        </div>
                       </div>
                     </div>
                   </div>
