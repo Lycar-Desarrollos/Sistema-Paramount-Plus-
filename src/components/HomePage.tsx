@@ -1025,10 +1025,7 @@ export default function HomePage({
 
           <div className="w-1/4 flex items-center justify-end gap-3">
 
-            <button onClick={onCreateProject} className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-brand-600/20 active:scale-95">
-              <Plus className="w-4 h-4" />
-              Nuevo espacio
-            </button>
+            {/* Botón eliminado por diseño */}
           </div>
         </div>
 
