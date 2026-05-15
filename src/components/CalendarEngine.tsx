@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useCampaignStore, type RecordData, type TableDefinition } from '../store/useCampaignStore';
+import { useCampaignStore, type RecordData, type Table } from '../store/useCampaignStore';
 import { useTheme } from '../context/ThemeContext';
 import { cn, hashColor, AVATAR_COLORS } from '../lib/utils';
 import { 

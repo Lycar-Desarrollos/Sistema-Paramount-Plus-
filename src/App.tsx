@@ -691,8 +691,8 @@ export default function App() {
             <KanbanEngine tableId={activeTableId} />
           )}
 
-          {currentTab === 'interfaces' && activeTableId && (
-            <CalendarEngine tableId={activeTableId} />
+          {currentTab === 'interfaces' && (
+            <CalendarEngine />
           )}
 
 
