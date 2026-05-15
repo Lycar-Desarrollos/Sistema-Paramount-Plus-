@@ -30,7 +30,7 @@ import { signOut } from 'firebase/auth';
 import { ChevronDown, X, MessageSquare, Globe, Lock, Calendar } from 'lucide-react';
 import { useCampaignStore, DEFAULT_COLUMNS_V2, DEFAULT_FORM_COLUMNS, type ColumnType } from './store/useCampaignStore';
 
-type MainTab = 'datos' | 'automatizaciones' | 'interfaces' | 'marketing';
+type MainTab = 'datos' | 'automatizaciones' | 'interfaces';
 
 
 
@@ -118,8 +118,12 @@ export default function App() {
 
   useEffect(() => {
     if (!user || !activeProjectId) return;
-    const unsub = initializeProjectData(activeProjectId);
-    return () => unsub();
+    const unsubTables = initializeProjectData(activeProjectId);
+    const unsubProjectRecords = useCampaignStore.getState().initializeProjectRecords(activeProjectId);
+    return () => {
+      unsubTables();
+      unsubProjectRecords();
+    };
   }, [user, activeProjectId, initializeProjectData]);
 
   useEffect(() => {
@@ -555,8 +559,7 @@ export default function App() {
             {[
               { id: 'datos', label: 'Tabla', icon: Database },
               { id: 'automatizaciones', label: 'Flujos', icon: ZapIcon },
-              { id: 'interfaces', label: 'Calendario', icon: Calendar },
-              { id: 'marketing', label: 'Insights', icon: Sparkles }
+              { id: 'interfaces', label: 'Calendario', icon: Calendar }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -692,9 +695,7 @@ export default function App() {
             <CalendarEngine tableId={activeTableId} />
           )}
 
-          {currentTab === 'marketing' && (
-            <MarketingHub />
-          )}
+
 
         </div>
 

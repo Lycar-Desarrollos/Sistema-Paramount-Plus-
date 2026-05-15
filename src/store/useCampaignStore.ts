@@ -159,11 +159,13 @@ interface CampaignStore {
   projects: Project[];
   tables: Table[];
   records: RecordData[];
+  allProjectRecords: RecordData[];
   allUsers: { email: string; displayName?: string; photoURL?: string }[];
   columnDefinitions: ColumnDefinition[];
   loading: boolean;
   error: string | null;
   initializeGlobal: (user: any, userData: any) => () => void;
+  initializeProjectRecords: (projectId: string) => () => void;
   initializeProjectData: (projectId: string) => () => void;
   initializeTableData: (tableId: string) => () => void;
   addProject: (name: string, template: string) => Promise<void>;
@@ -212,6 +214,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   projects: [],
   tables: [],
   records: [],
+  allProjectRecords: [],
   allUsers: [],
   columnDefinitions: [],
   loading: false,
@@ -341,6 +344,58 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       unsubWorkspaces();
       unsubTables();
       unsubUsers();
+    };
+  },
+
+  initializeProjectRecords: (projectId: string) => {
+    if (!projectId) return () => {};
+    
+    // Listen to ALL tables of this project first to get IDs
+    const tablesQ = query(collection(db, 'tables'), where('projectId', '==', projectId));
+    
+    let unsubRecords = () => {};
+    
+    const unsubTables = onSnapshot(tablesQ, (tSnap) => {
+      const tableIds = tSnap.docs.map(d => d.id);
+      unsubRecords(); // Cleanup previous records listener
+      
+      if (tableIds.length === 0) {
+        set({ allProjectRecords: [] });
+        return;
+      }
+
+      // Query all records belonging to these tables
+      // Chunks of 30 due to Firestore 'in' limit
+      const chunks: string[][] = [];
+      for (let i = 0; i < tableIds.length; i += 30) {
+        chunks.push(tableIds.slice(i, i + 30));
+      }
+
+      const allRecsMap = new Map<string, RecordData>();
+      const unsubs: (() => void)[] = [];
+
+      chunks.forEach(chunk => {
+        const q = query(collection(db, 'campaigns'), where('tableId', 'in', chunk));
+        const u = onSnapshot(q, (snap) => {
+          snap.docs.forEach(d => allRecsMap.set(d.id, { id: d.id, ...d.data() } as RecordData));
+          
+          // Re-filter to remove deleted records (Map doesn't auto-delete on snap)
+          // Actually, onSnapshot provides 'removed' change type.
+          snap.docChanges().forEach(change => {
+            if (change.type === 'removed') allRecsMap.delete(change.doc.id);
+          });
+
+          set({ allProjectRecords: Array.from(allRecsMap.values()) });
+        });
+        unsubs.push(u);
+      });
+
+      unsubRecords = () => unsubs.forEach(u => u());
+    });
+
+    return () => {
+      unsubTables();
+      unsubRecords();
     };
   },
 
