@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Grid3X3, List, Star, Clock, Users, LogOut, Sparkles, MoreHorizontal, Database, ArrowLeft, Table2, Trash2, Sun, Moon, ChevronRight, ChevronLeft, Info, X, Mail, Loader2, Settings } from 'lucide-react';
+import { Plus, Search, Grid3X3, List, Star, Clock, Users, LogOut, Sparkles, MoreHorizontal, Database, ArrowLeft, Table2, Trash2, Sun, Moon, ChevronRight, ChevronLeft, Info, X, Mail, Loader2, Settings, Check } from 'lucide-react';
 import { cn, hashColor, AVATAR_COLORS } from '../lib/utils';
 import { useCampaignStore, type Project, type Table } from '../store/useCampaignStore';
 import type { UserRole } from '../context/AuthContext';
