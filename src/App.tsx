@@ -213,7 +213,7 @@ export default function App() {
     return (
       <>
         <TeamPage onBack={() => setShowTeamManagement(false)} user={user} userData={userData} activeProjectId={activeProjectId} isProMode={isProMode} onToggleProMode={handleProToggle} />
-
+        <AIChat userData={userData} user={user} />
       </>
     );
   }
@@ -226,7 +226,7 @@ export default function App() {
     return (
       <>
         <AccountPage user={user} userData={userData} onBack={() => setShowAccountSettings(false)} isProMode={isProMode} onToggleProMode={handleProToggle} />
-
+        <AIChat userData={userData} user={user} />
       </>
     );
   }
@@ -735,7 +735,7 @@ export default function App() {
         />
 
         {/* AI Chat — Admin Only, Secret FAB */}
-        {!showHome && <AIChat userData={userData} user={user} />}
+        <AIChat userData={userData} user={user} />
 
       </main>
     </div>

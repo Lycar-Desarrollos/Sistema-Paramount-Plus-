@@ -1334,7 +1334,7 @@ export default function HomePage({
           />
         )}
       </AnimatePresence>
-      {selectedProjectId && <AIChat user={user} userData={userData} />}
+
     </div>
   );
 }

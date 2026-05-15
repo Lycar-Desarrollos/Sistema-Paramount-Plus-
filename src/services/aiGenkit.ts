@@ -44,8 +44,9 @@ export async function callGenkitAI(prompt: string, context: NaticContext) {
 
   try {
     // We use the Google Generative AI REST API directly for maximum stability in the browser
+    console.log('NaticBox AI: Conectando con gemini-flash-latest...');
     const response = await Promise.race([
-      fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${API_KEY}`, {
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -62,7 +63,8 @@ export async function callGenkitAI(prompt: string, context: NaticContext) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'Error en la API de Google');
+      console.error('[NaticBox AI] API Error Response:', JSON.stringify(errorData, null, 2));
+      throw new Error(errorData.error?.message || `Error HTTP ${response.status}`);
     }
 
     const data = await response.json();

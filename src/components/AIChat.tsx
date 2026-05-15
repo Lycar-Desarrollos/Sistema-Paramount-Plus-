@@ -43,16 +43,16 @@ export default function AIChat({ userData, user }: AIChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Check admin status
+  // Check admin status — wait for userData to load before blocking
   const MASTER_ADMIN_UID = 'RXH1eN22BtUAdJBrK4bPR3AxiO52';
   const isMasterAdmin = user?.uid === MASTER_ADMIN_UID;
   const isAdmin = userData?.role === 'admin' || isMasterAdmin;
 
-  console.log('[AIChat] State:', { isAiOpen, isAdmin, userEmail: user?.email, role: userData?.role });
+  console.log('[AIChat] State:', { isAiOpen, isAdmin, userEmail: user?.email, role: userData?.role, uid: user?.uid });
 
-  // If not admin, we truly don't render. 
-  // But we allow a small grace period or check by email to be safe.
-  if (!isAdmin && user) {
+  // If userData hasn't loaded yet AND user is not the master admin, wait
+  // Don't block render — just hide the panel until we know for sure
+  if (!isAdmin && user && userData !== undefined) {
     console.warn('[AIChat] Access denied: User is not admin');
     return null;
   }
