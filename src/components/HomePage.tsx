@@ -399,9 +399,11 @@ export default function HomePage({
                         onClick={() => handleTableClick(selectedProject.id, table.id)}
                         onMouseEnter={() => setHoveredId(table.id)}
                         onMouseLeave={() => setHoveredId(null)}
-                        className={`group flex items-center gap-4 p-4 card-standard ${
-                          isDarkMode ? 'card-dark' : 'card-light'
-                        } cursor-pointer select-none`}
+                        className={cn(
+                          "group flex items-center gap-4 p-4 card-standard transition-all duration-300 select-none cursor-pointer",
+                          isDarkMode ? 'card-dark' : 'card-light',
+                          openMenuTableId === table.id ? "z-50 relative scale-[1.02] shadow-2xl" : "z-0"
+                        )}
                       >
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-extrabold text-white flex-shrink-0 shadow-lg ${hashColor(table.id, TABLE_COLORS)}`}>
                           {initials(table.name)}
@@ -1057,7 +1059,11 @@ export default function HomePage({
                       onClick={() => handleWorkspaceClick(proj.id)}
                       onMouseEnter={() => setHoveredId(proj.id)}
                       onMouseLeave={() => setHoveredId(null)}
-                      className={`group flex items-center gap-4 p-4 card-standard ${isDarkMode ? 'card-dark' : 'card-light'} cursor-pointer select-none`}
+                      className={cn(
+                        "group flex items-center gap-4 p-4 card-standard transition-all duration-300 select-none cursor-pointer",
+                        isDarkMode ? 'card-dark' : 'card-light',
+                        openMenuProjectId === proj.id ? "z-50 relative scale-[1.02] shadow-2xl" : "z-0"
+                      )}
                     >
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-extrabold text-white flex-shrink-0 shadow-lg ${hashColor(proj.id, AVATAR_COLORS)}`}>
                         {initials(proj.name)}
