@@ -876,10 +876,9 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
                   {(() => {
                     const displayTable = tables.find(t => t.id === detailRecord.tableId) || activeTable;
                     const currentCols = displayTable?.columnDefinitions || [];
-                    
-                    return currentCols.filter(c => c.type !== 'link').map(col => {
+                    return currentCols.map(col => {
                       const val = detailRecord.values?.[col.id];
-                      if (val === undefined || val === null || val === '') return null;
+                      const isEmpty = val === undefined || val === null || val === '' || (Array.isArray(val) && val.length === 0);
 
                       return (
                         <div key={col.id} className={`flex flex-col gap-2 pb-5 border-b last:border-0 ${
@@ -889,91 +888,111 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
                             {col.name}
                           </p>
 
-                        {/* TEXT / NUMBER / DATE / EMAIL / PHONE */}
-                        {['text','number','date','email','phone'].includes(col.type) && (
-                          <p className={`text-sm font-semibold ${
-                            isDarkMode ? 'text-white' : 'text-slate-900'
-                          }`}>{String(val)}</p>
-                        )}
+                        {isEmpty ? (
+                          <p className="text-sm font-medium italic text-slate-600">No especificado</p>
+                        ) : (
+                          <>
+                            {/* TEXT / NUMBER / DATE / EMAIL / PHONE */}
+                            {['text','number','date','email','phone'].includes(col.type) && (
+                              <p className={`text-sm font-semibold ${
+                                isDarkMode ? 'text-white' : 'text-slate-900'
+                              }`}>{String(val)}</p>
+                            )}
 
-                        {/* SELECT badge */}
-                        {col.type === 'select' && (() => {
-                          const opt = (col.config?.options || []).find((o: any) => o.label === val);
-                          return (
-                            <span
-                              className="inline-flex self-start px-3 py-1 rounded-xl text-xs font-black"
-                              style={{
-                                backgroundColor: opt?.color ? `${opt.color}25` : '#6366f125',
-                                color: opt?.color || '#6366f1',
-                                border: `1px solid ${opt?.color ? `${opt.color}40` : '#6366f140'}`,
-                              }}
-                            >
-                              {String(val)}
-                            </span>
-                          );
-                        })()}
+                            {/* SELECT badge */}
+                            {col.type === 'select' && (() => {
+                              const opt = (col.config?.options || []).find((o: any) => o.label === val);
+                              return (
+                                <span
+                                  className="inline-flex self-start px-3 py-1 rounded-xl text-xs font-black"
+                                  style={{
+                                    backgroundColor: opt?.color ? `${opt.color}25` : '#6366f125',
+                                    color: opt?.color || '#6366f1',
+                                    border: `1px solid ${opt?.color ? `${opt.color}40` : '#6366f140'}`,
+                                  }}
+                                >
+                                  {String(val)}
+                                </span>
+                              );
+                            })()}
 
-                        {/* CHECKBOX */}
-                        {col.type === 'checkbox' && (
-                          <div className={`flex items-center gap-2 text-sm font-semibold ${
-                            val ? 'text-emerald-500' : isDarkMode ? 'text-slate-500' : 'text-slate-400'
-                          }`}>
-                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${
-                              val ? 'bg-emerald-500 border-emerald-500' : isDarkMode ? 'border-white/20' : 'border-slate-300'
-                            }`}>
-                              {val && <CheckCircle2 className="w-3 h-3 text-white" />}
-                            </div>
-                            {val ? 'Sí' : 'No'}
-                          </div>
-                        )}
+                            {/* CHECKBOX */}
+                            {col.type === 'checkbox' && (
+                              <div className={`flex items-center gap-2 text-sm font-semibold ${
+                                val ? 'text-emerald-500' : isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                              }`}>
+                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${
+                                  val ? 'bg-emerald-500 border-emerald-500' : isDarkMode ? 'border-white/20' : 'border-slate-300'
+                                }`}>
+                                  {val && <CheckCircle2 className="w-3 h-3 text-white" />}
+                                </div>
+                                {val ? 'Sí' : 'No'}
+                              </div>
+                            )}
 
-                        {/* USER */}
-                        {col.type === 'user' && (() => {
-                          const emails: string[] = Array.isArray(val) ? val : [String(val)];
-                          return (
-                            <div className="flex flex-wrap gap-2">
-                              {emails.map(email => {
-                                const u = allUsers.find((u: any) => u.email?.toLowerCase() === email.toLowerCase()) as any;
-                                return (
-                                  <div key={email} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-500/10 border border-brand-500/20">
-                                    {u?.photoURL ? (
-                                      <img src={u.photoURL} alt="" className="w-5 h-5 rounded-full object-cover" />
-                                    ) : (
-                                      <div className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-black text-white">
-                                        {email.charAt(0).toUpperCase()}
+                            {/* USER */}
+                            {col.type === 'user' && (() => {
+                              const emails: string[] = Array.isArray(val) ? val : [String(val)];
+                              return (
+                                <div className="flex flex-wrap gap-2">
+                                  {emails.map(email => {
+                                    const u = allUsers.find((u: any) => u.email?.toLowerCase() === email.toLowerCase()) as any;
+                                    return (
+                                      <div key={email} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-500/10 border border-brand-500/20">
+                                        {u?.photoURL ? (
+                                          <img src={u.photoURL} alt="" className="w-5 h-5 rounded-full object-cover" />
+                                        ) : (
+                                          <div className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-black text-white">
+                                            {email.charAt(0).toUpperCase()}
+                                          </div>
+                                        )}
+                                        <span className="text-xs font-bold text-brand-400">
+                                          {u?.displayName || email.split('@')[0]}
+                                        </span>
                                       </div>
-                                    )}
-                                    <span className="text-xs font-bold text-brand-400">
-                                      {u?.displayName || email.split('@')[0]}
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
+
+                            {/* ATTACHMENT */}
+                            {col.type === 'attachment' && Array.isArray(val) && (
+                              <div className="flex flex-wrap gap-3">
+                                {val.map((file: any, idx: number) => {
+                                  const isImg = file.type?.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp)$/i.test(file.name || '');
+                                  return isImg ? (
+                                    <a key={idx} href={file.url} target="_blank" rel="noopener noreferrer"
+                                      className="block w-24 h-24 rounded-2xl overflow-hidden border border-white/10 hover:border-brand-500 transition-all shadow-lg hover:scale-105">
+                                      <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
+                                    </a>
+                                  ) : (
+                                    <a key={idx} href={file.url} target="_blank" rel="noopener noreferrer"
+                                      className={`flex items-center gap-2 px-4 py-3 rounded-2xl border text-xs font-bold transition-all hover:border-brand-500 ${
+                                        isDarkMode ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+                                      }`}>
+                                      <FileText className="w-4 h-4 text-red-400" />
+                                      {file.name || 'Archivo'}
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* LINK */}
+                            {col.type === 'link' && Array.isArray(val) && (
+                              <div className="flex flex-wrap gap-2">
+                                {val.map((link: any, idx: number) => (
+                                  <div key={idx} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-500/5 border border-brand-500/10">
+                                    <Link2 className="w-3.5 h-3.5 text-brand-500" />
+                                    <span className="text-xs font-bold text-slate-300">
+                                      {link.displayValue || 'Vínculo'}
                                     </span>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })()}
-
-                        {/* ATTACHMENT */}
-                        {col.type === 'attachment' && Array.isArray(val) && (
-                          <div className="flex flex-wrap gap-3">
-                            {val.map((file: any, idx: number) => {
-                              const isImg = file.type?.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp)$/i.test(file.name || '');
-                              return isImg ? (
-                                <a key={idx} href={file.url} target="_blank" rel="noopener noreferrer"
-                                  className="block w-24 h-24 rounded-2xl overflow-hidden border border-white/10 hover:border-brand-500 transition-all shadow-lg hover:scale-105">
-                                  <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
-                                </a>
-                              ) : (
-                                <a key={idx} href={file.url} target="_blank" rel="noopener noreferrer"
-                                  className={`flex items-center gap-2 px-4 py-3 rounded-2xl border text-xs font-bold transition-all hover:border-brand-500 ${
-                                    isDarkMode ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
-                                  }`}>
-                                  <FileText className="w-4 h-4 text-red-400" />
-                                  {file.name || 'Archivo'}
-                                </a>
-                              );
-                            })}
-                          </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         )}
                         </div>
                       );
