@@ -96,15 +96,7 @@ export default function Dashboard({ onCreateProject, onCreateTable }: { onCreate
           <p className="text-slate-500 mt-2 font-medium">Gestiona tus datos, procesos y equipo desde un solo lugar.</p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onCreateProject}
-            className="px-6 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-2xl text-sm font-black transition-all shadow-xl shadow-brand-500/20 flex items-center gap-2 active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            NUEVO ESPACIO
-          </button>
-        </div>
+        {/* Se eliminó el botón redundante de aquí por solicitud del usuario */}
       </div>
 
       {/* Stats Grid */}
