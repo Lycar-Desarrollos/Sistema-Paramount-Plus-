@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ArrowLeft, Plus, User, Mail, Trash2, Camera, Loader2, Save, Sparkles, Sun, Moon, Users, Info, Database, Key, X as CloseIcon, Pencil, X, Lock } from 'lucide-react';
+import { Shield, ArrowLeft, Plus, User, Mail, Trash2, Camera, Loader2, Save, Sparkles, Sun, Moon, Users, Info, Database, Key, X as CloseIcon, Pencil, X, Lock, Layout } from 'lucide-react';
 import { collection, query, getDocs, addDoc, deleteDoc, doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
@@ -8,6 +8,7 @@ import { db, firebaseConfig } from '../firebase';
 import type { UserRole } from '../context/AuthContext';
 import { UserMenu } from './UserMenu';
 import ManageTeamModal from './ManageTeamModal';
+import WorkspaceAssignmentModal from './WorkspaceAssignmentModal';
 import AIChat from './AIChat';
 import { useTheme } from '../context/ThemeContext';
 import { useCampaignStore } from '../store/useCampaignStore';
@@ -31,7 +32,7 @@ interface Props {
 }
 
 // ─── MemberCard — extracted to a proper component so hooks work correctly ───
-function MemberCard({ member, user, userData, isDarkMode, cardBg, textTitle, onResetPassword, onDelete, onPhotoUpdated }: {
+function MemberCard({ member, user, userData, isDarkMode, cardBg, textTitle, onResetPassword, onDelete, onPhotoUpdated, onManageWorkspaces }: {
   member: TeamMember;
   user: any;
   userData: any;
@@ -41,6 +42,7 @@ function MemberCard({ member, user, userData, isDarkMode, cardBg, textTitle, onR
   onResetPassword: (id: string, email: string) => void;
   onDelete: (id: string, email: string) => void;
   onPhotoUpdated: (id: string, photoURL: string) => void;
+  onManageWorkspaces: (member: TeamMember) => void;
 }) {
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(member.displayName || '');
@@ -186,14 +188,31 @@ function MemberCard({ member, user, userData, isDarkMode, cardBg, textTitle, onR
         <p className="text-xs text-slate-500 font-medium mt-1">{member.email}</p>
       </div>
 
-      {/* Role badge */}
-      <div className={`pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-100'} mt-auto flex items-center justify-between`}>
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rol</span>
-        <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-          member.role === 'admin' ? 'bg-brand-500/10 text-brand-500 border border-brand-500/20' : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
-        }`}>
-          {member.role === 'admin' ? 'Propietario' : 'Colaborador'}
-        </span>
+      {/* Role and Workspaces */}
+      <div className={`pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-100'} mt-auto space-y-4`}>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rol</span>
+          <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+            member.role === 'admin' ? 'bg-brand-500/10 text-brand-500 border border-brand-500/20' : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+          }`}>
+            {member.role === 'admin' ? 'Propietario' : 'Colaborador'}
+          </span>
+        </div>
+
+        {userData?.role === 'admin' && (
+          <button
+            onClick={() => onManageWorkspaces(member)}
+            className={cn(
+              "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[11px] font-bold transition-all",
+              isDarkMode 
+                ? "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white" 
+                : "bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            )}
+          >
+            <Layout className="w-3.5 h-3.5" />
+            Asignar Proyectos
+          </button>
+        )}
       </div>
     </div>
   );
@@ -226,6 +245,7 @@ export default function TeamPage({ onBack, user, userData, isProMode, onTogglePr
   const [resetUserEmail, setResetUserEmail] = useState('');
   const [resetPassword, setResetPassword] = useState('');
   const [isResetting, setIsResetting] = useState(false);
+  const [assigningMember, setAssigningMember] = useState<TeamMember | null>(null);
 
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
@@ -587,6 +607,7 @@ export default function TeamPage({ onBack, user, userData, isProMode, onTogglePr
                         onResetPassword={(id, email) => { setResetUserId(id); setResetUserEmail(email); setResetPassword(''); }}
                         onDelete={(id, email) => handleDelete(id, email)}
                         onPhotoUpdated={(id, photoURL) => setMembers(prev => prev.map(m => m.id === id ? { ...m, photoURL } : m))}
+                        onManageWorkspaces={(m) => setAssigningMember(m)}
                       />
                     ))}
                   </div>
@@ -773,6 +794,16 @@ export default function TeamPage({ onBack, user, userData, isProMode, onTogglePr
                 )}
               </motion.div>
             </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal Asignación Proyectos */}
+        <AnimatePresence>
+          {assigningMember && (
+            <WorkspaceAssignmentModal 
+              member={assigningMember}
+              onClose={() => setAssigningMember(null)}
+            />
           )}
         </AnimatePresence>
       </main>
