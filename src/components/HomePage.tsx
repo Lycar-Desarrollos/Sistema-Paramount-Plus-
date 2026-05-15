@@ -71,7 +71,7 @@ export default function HomePage({
   const [isMemberAdding, setIsMemberAdding] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [inlineMemberEmail, setInlineMemberEmail] = useState('');
-  const [inlineAddingMember, setInlineAddingMember] = useState(false);
+  const [inlineAddingMember, setInlineAddingMember] = useState('');
 
   const { isAiOpen, setIsAiOpen, toggleFavoriteProject, isSidebarCollapsed, setIsSidebarCollapsed, setActiveProjectId, allUsers } = useCampaignStore();
 
@@ -612,48 +612,103 @@ export default function HomePage({
                         )}
                       </div>
 
-                      {/* Inline add member */}
+                      {/* Inline add member - Enhanced Searchable List */}
                       {showAddMember && (userData?.role === 'admin' || (selectedProject as any).ownerId === user?.uid) && (
-                        <div className={`rounded-2xl border p-3 space-y-2 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Selecciona un usuario</p>
-                          <div className="flex gap-1.5">
-                            <select
-                              value={inlineMemberEmail}
-                              onChange={e => setInlineMemberEmail(e.target.value)}
-                              className={`flex-1 px-2.5 py-2 rounded-xl text-xs outline-none transition-all appearance-none min-w-0 ${
-                                isDarkMode ? 'bg-[#0f0f13] border border-white/10 text-white' : 'bg-white border border-slate-200 text-slate-900'
-                              }`}
-                            >
-                              <option value="">— Selecciona —</option>
-                              {allUsers
-                                .filter((u: any) => u.email && !selectedProject.memberEmails?.map((m: string) => m.toLowerCase()).includes(u.email.toLowerCase()))
-                                .map((u: any) => (
-                                  <option key={u.id || u.email} value={u.email}>
-                                    {u.displayName || u.email.split('@')[0]} · {u.email}
-                                  </option>
-                                ))
-                              }
-                            </select>
-                            <button
-                              disabled={!inlineMemberEmail || inlineAddingMember}
-                              onClick={async () => {
-                                if (!inlineMemberEmail) return;
-                                setInlineAddingMember(true);
-                                try {
-                                  await useCampaignStore.getState().addMemberToProject(selectedProject.id, inlineMemberEmail, 'colaborador');
-                                  setInlineMemberEmail('');
-                                  setShowAddMember(false);
-                                } catch(e) { console.error(e); }
-                                finally { setInlineAddingMember(false); }
-                              }}
-                              className="px-3 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-white text-xs font-bold transition-all disabled:opacity-40 flex-shrink-0"
-                            >
-                              {inlineAddingMember ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Agregar'}
-                            </button>
+                        <div className={cn(
+                          "rounded-2xl border flex flex-col max-h-[300px] overflow-hidden transition-all duration-300 shadow-xl",
+                          isDarkMode ? "bg-[#13131a] border-white/10 shadow-black/40" : "bg-white border-slate-200 shadow-slate-200/50"
+                        )}>
+                          {/* Search Input */}
+                          <div className="p-3 border-b border-white/5 sticky top-0 bg-inherit z-10">
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                              <input 
+                                autoFocus
+                                type="text"
+                                placeholder="Buscar colaborador..."
+                                value={inlineMemberEmail}
+                                onChange={e => setInlineMemberEmail(e.target.value)}
+                                className={cn(
+                                  "w-full pl-8 pr-3 py-2 text-[11px] font-bold rounded-xl border outline-none transition-all",
+                                  isDarkMode ? "bg-black/40 border-white/5 text-white" : "bg-slate-50 border-slate-100 text-slate-900"
+                                )}
+                              />
+                            </div>
                           </div>
-                          {allUsers.filter((u: any) => u.email && !selectedProject.memberEmails?.map((m: string) => m.toLowerCase()).includes(u.email.toLowerCase())).length === 0 && (
-                            <p className="text-[10px] text-slate-400 text-center py-1">Todos los usuarios ya son miembros</p>
-                          )}
+
+                          {/* Users List */}
+                          <div className="flex-1 overflow-y-auto p-1.5 space-y-1 custom-scrollbar-thin">
+                            {allUsers
+                              .filter((u: any) => 
+                                u.email && 
+                                (u.email.toLowerCase().includes(inlineMemberEmail.toLowerCase()) || 
+                                 u.displayName?.toLowerCase().includes(inlineMemberEmail.toLowerCase()))
+                              )
+                              .map((u: any) => {
+                                const isMember = selectedProject.memberEmails?.map((m: string) => m.toLowerCase()).includes(u.email.toLowerCase());
+                                const isProcessing = inlineAddingMember === u.email;
+
+                                return (
+                                  <button
+                                    key={u.id || u.email}
+                                    onClick={async () => {
+                                      if (isProcessing) return;
+                                      setInlineAddingMember(u.email);
+                                      try {
+                                        if (isMember) {
+                                          await useCampaignStore.getState().removeMemberFromProject(selectedProject.id, u.email);
+                                        } else {
+                                          await useCampaignStore.getState().addMemberToProject(selectedProject.id, u.email, 'colaborador');
+                                        }
+                                      } catch (e) { console.error(e); }
+                                      finally { setInlineAddingMember(''); }
+                                    }}
+                                    className={cn(
+                                      "w-full flex items-center justify-between p-2 rounded-xl transition-all text-left group",
+                                      isMember 
+                                        ? (isDarkMode ? "bg-brand-500/10 text-white" : "bg-brand-50 text-brand-700")
+                                        : (isDarkMode ? "hover:bg-white/5 text-slate-400" : "hover:bg-slate-50 text-slate-600")
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      {u.photoURL ? (
+                                        <img src={u.photoURL} className="w-6 h-6 rounded-lg object-cover shrink-0" alt="" />
+                                      ) : (
+                                        <div className={cn(
+                                          "w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black text-white shrink-0 shadow-sm",
+                                          hashColor(u.email, AVATAR_COLORS)
+                                        )}>
+                                          {u.email[0].toUpperCase()}
+                                        </div>
+                                      )}
+                                      <div className="min-w-0">
+                                        <p className="text-[10px] font-bold truncate">
+                                          {u.displayName || u.email.split('@')[0]}
+                                        </p>
+                                        <p className="text-[9px] text-slate-500 truncate">{u.email}</p>
+                                      </div>
+                                    </div>
+
+                                    <div className={cn(
+                                      "w-5 h-5 rounded-lg flex items-center justify-center transition-all",
+                                      isMember ? "bg-brand-500 text-white" : (isDarkMode ? "bg-white/5" : "bg-slate-100")
+                                    )}>
+                                      {isProcessing ? (
+                                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                      ) : isMember ? (
+                                        <Check className="w-3 h-3" />
+                                      ) : (
+                                        <Plus className="w-3 h-3 text-slate-400 group-hover:text-brand-500" />
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })
+                            }
+                            {allUsers.length === 0 && (
+                              <p className="text-[10px] text-slate-500 text-center py-4">No hay otros usuarios</p>
+                            )}
+                          </div>
                         </div>
                       )}
 
