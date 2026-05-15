@@ -197,9 +197,7 @@ interface CampaignStore {
   setAiLoadingText: (val: string) => void;
   triggerAiSimulation: (textSequence?: string[], duration?: number) => Promise<void>;
   isAiOpen: boolean;
-  setIsAiOpen: (open: boolean) => void;
-  detailRecord: RecordData | null;
-  setDetailRecord: (record: RecordData | null) => void;
+  setIsAiOpen: (val: boolean) => void;
   aiWindowState: 'open' | 'minimized';
   setAiWindowState: (val: 'open' | 'minimized') => void;
   chatMessages: { role: 'user' | 'ai'; content: string }[];
@@ -267,12 +265,6 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
       set({ projects: sorted, loading: false });
 
-      if (sorted.length === 0) {
-        set({ tables: [], records: [], activeProjectId: '', activeTableId: '' });
-        unsubTables();
-        return;
-      }
-
       if (sorted.length > 0 && !get().activeProjectId) {
         set({ activeProjectId: sorted[0].id });
       }
@@ -337,15 +329,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     let unsubUsers = () => {};
     unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      
-      // If user is admin, show all. If not, only show themselves for now (or we can expand this to project members)
-      if (userData?.role === 'admin') {
-        set({ allUsers: usersData });
-      } else {
-        // For collaborators, we only show themselves in the global list for metrics
-        // (In a real scenario, we'd filter by project membership)
-        set({ allUsers: usersData.filter((u: any) => u.email?.toLowerCase() === userEmail) });
-      }
+      set({ allUsers: usersData });
     }, (err) => {
       // Permission denied means the user can't list all users — that's fine, allUsers stays []
       if (!err.message?.includes('permission')) {
@@ -944,9 +928,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     }
   },
   isAiOpen: false,
-  setIsAiOpen: (open) => set({ isAiOpen: open }),
-  detailRecord: null,
-  setDetailRecord: (record) => set({ detailRecord: record }),
+  setIsAiOpen: (val: boolean) => set({ isAiOpen: val }),
   aiWindowState: 'open',
   setAiWindowState: (val: 'open' | 'minimized') => set({ aiWindowState: val }),
   chatMessages: [],

@@ -22,7 +22,6 @@ import MarketingHub from './pages/marketing/MarketingHub';
 import HomePage from './components/HomePage';
 import PublicFormView from './components/PublicFormView';
 import AIChat from './components/AIChat';
-import RecordDetailModal from './components/RecordDetailModal';
 import { useAuth } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
 import { auth } from './firebase';
@@ -737,9 +736,6 @@ export default function App() {
 
         {/* AI Chat — Admin Only, Secret FAB */}
         {!showHome && <AIChat userData={userData} user={user} />}
-        
-        {/* Global Record Detail Modal */}
-        <RecordDetailModal />
 
       </main>
     </div>
