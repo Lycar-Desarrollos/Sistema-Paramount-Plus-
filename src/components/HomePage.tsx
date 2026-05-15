@@ -638,17 +638,18 @@ export default function HomePage({
                             </div>
                           </div>
 
-                          {/* Users List */}
                           <div className="flex-1 overflow-y-auto p-1.5 space-y-1 custom-scrollbar-thin">
                             {allUsers
                               .filter((u: any) => 
                                 u.email && 
-                                (u.email.toLowerCase().includes(inlineMemberEmail.toLowerCase()) || 
-                                 u.displayName?.toLowerCase().includes(inlineMemberEmail.toLowerCase()))
-                              )
-                              .map((u: any) => {
-                                const isMember = selectedProject.memberEmails?.map((m: string) => m.toLowerCase()).includes(u.email.toLowerCase());
-                                const isProcessing = inlineAddingMember === u.email;
+                                typeof u.email === 'string' &&
+                                  (u.email.toLowerCase().includes((inlineMemberEmail || '').toLowerCase()) || 
+                                   (u.displayName && typeof u.displayName === 'string' && u.displayName.toLowerCase().includes((inlineMemberEmail || '').toLowerCase())))
+                                )
+                                .map((u: any) => {
+                                  const currentMemberEmails = selectedProject.memberEmails || [];
+                                  const isMember = currentMemberEmails.some((m: string) => m.toLowerCase() === u.email.toLowerCase());
+                                  const isProcessing = inlineAddingMember === u.email;
 
                                 return (
                                   <button
