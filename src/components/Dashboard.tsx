@@ -15,12 +15,14 @@ import {
   Activity
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { useCampaignStore } from '../store/useCampaignStore';
 import { cn, hashColor, AVATAR_COLORS } from '../lib/utils';
 
 export default function Dashboard({ onCreateProject, onCreateTable }: { onCreateProject: () => void, onCreateTable: (projectId: string) => void }) {
   const { isDarkMode } = useTheme();
-  const { projects, tables, allUsers, setActiveProjectId, user } = useCampaignStore();
+  const { user } = useAuth();
+  const { projects, tables, allUsers, setActiveProjectId } = useCampaignStore();
 
   const stats = [
     { 
