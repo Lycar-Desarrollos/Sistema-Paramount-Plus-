@@ -11,11 +11,17 @@ import { db } from '../firebase';
 
 const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord, activeTable, setAssignmentConfirm }: { record: RecordData, column: ColumnDefinition, setIsLinkingRecord: any, setDetailRecord: any, activeTable: any, setAssignmentConfirm: any }) => {
+const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord, activeTable, setAssignmentConfirm, editingCellId, setEditingCellId }: { record: RecordData, column: ColumnDefinition, setIsLinkingRecord: any, setDetailRecord: any, activeTable: any, setAssignmentConfirm: any, editingCellId: string | null, setEditingCellId: (id: string | null) => void }) => {
+  const cellId = `${record.id}-${column.id}`;
+  const editing = editingCellId === cellId;
+  const setEditing = (isEditing: boolean) => {
+    if (isEditing) setEditingCellId(cellId);
+    else if (editing) setEditingCellId(null);
+  };
+  
   const { isDarkMode } = useTheme();
   const updateRecordField = useCampaignStore(state => state.updateRecordField);
   const value = record.values[column.id];
-  const [editing, setEditing] = useState(false);
   const [localVal, setLocalVal] = useState(value);
 
   useEffect(() => { setLocalVal(value); }, [value]);
@@ -465,6 +471,7 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
   const [detailRecord, setDetailRecord] = useState<RecordData | null>(null);
   const [rejectionConfirm, setRejectionConfirm] = useState<RecordData | null>(null);
   const [assignmentConfirm, setAssignmentConfirm] = useState<{ record: RecordData, colName: string, value: any } | null>(null);
+  const [editingCellId, setEditingCellId] = useState<string | null>(null);
   
   const tables = useCampaignStore(state => state.tables);
   const activeTable = tables.find(t => t.id === activeTableId);
@@ -737,7 +744,17 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
                             </div>
                           </td>
                           {(columnDefinitions || []).map(col => (
-                            <DynamicCell key={col.id} record={rec} column={col} setIsLinkingRecord={setIsLinkingRecord} setDetailRecord={setDetailRecord} activeTable={activeTable} setAssignmentConfirm={setAssignmentConfirm} />
+                            <DynamicCell 
+                              key={col.id} 
+                              record={rec} 
+                              column={col} 
+                              setIsLinkingRecord={setIsLinkingRecord} 
+                              setDetailRecord={setDetailRecord} 
+                              activeTable={activeTable} 
+                              setAssignmentConfirm={setAssignmentConfirm}
+                              editingCellId={editingCellId}
+                              setEditingCellId={setEditingCellId}
+                            />
                           ))}
                           <td className="p-0 border-r" />
                         </motion.tr>
