@@ -68,7 +68,7 @@ export interface RecordData {
 export const DEFAULT_CATEGORIES = ['Priority (L)', 'Moderate (M)', 'Tentpole (XL)', 'Social Media', 'Branding'];
 
 export const MARKETING_REQUEST_COLUMNS: ColumnDefinition[] = [
-  { id: 'status', name: 'Estado', type: 'select', hiddenInForm: true, config: { 
+  { id: 'workflow_status', name: 'Estado', type: 'select', hiddenInForm: true, config: { 
     options: [
       { label: 'Pendiente', color: '#64748b' },
       { label: 'En Revisión', color: '#3b82f6' },
@@ -446,7 +446,18 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
       const table = get().tables.find(t => t.id === tableId);
       if (table) {
-        set({ columnDefinitions: table.columnDefinitions || [] });
+        // Ensure column IDs are unique to prevent UI and data collisions
+        const seenIds = new Set<string>();
+        const uniqueCols = (table.columnDefinitions || []).map((col, idx) => {
+          let uniqueId = col.id;
+          let counter = 1;
+          while (seenIds.has(uniqueId)) {
+            uniqueId = `${col.id}_${counter++}`;
+          }
+          seenIds.add(uniqueId);
+          return { ...col, id: uniqueId };
+        });
+        set({ columnDefinitions: uniqueCols });
       }
 
       // ── Row-Level Security ──
@@ -921,6 +932,33 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     }
   },
   
+  addColumn: async (tableId: string, name: string, type: ColumnType, config?: any) => {
+    try {
+      const table = get().tables.find(t => t.id === tableId);
+      if (!table) return;
+
+      const newColumn: ColumnDefinition = {
+        id: name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(),
+        name,
+        type,
+        config
+      };
+
+      const updatedCols = [...(table.columnDefinitions || []), newColumn];
+      
+      await updateDoc(doc(db, 'tables', tableId), {
+        columnDefinitions: updatedCols
+      });
+      
+      set(state => ({
+        tables: state.tables.map(t => t.id === tableId ? { ...t, columnDefinitions: updatedCols } : t),
+        columnDefinitions: tableId === state.activeTableId ? updatedCols : state.columnDefinitions
+      }));
+    } catch (error: any) {
+      console.error("Error adding column:", error);
+    }
+  },
+
   deleteTable: async (tableId: string) => {
     try {
       // 1. Seleccionar otra tabla ANTES de borrar para evitar pantalla en blanco

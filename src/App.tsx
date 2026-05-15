@@ -591,8 +591,9 @@ export default function App() {
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden">
-          {currentTab === 'datos' && (
+          {(currentTab === 'datos' || currentTab === 'automatizaciones') && (
             <main className="flex-1 flex flex-col overflow-hidden relative">
+              {/* Common Table Header for Data and Flows */}
               <div className={`flex items-center px-6 border-b h-12 transition-colors ${isDarkMode ? 'bg-[#0f0f13]/80 backdrop-blur-sm border-white/5' : 'bg-white/80 backdrop-blur-sm border-slate-200'}`}>
                 <div className="flex items-center gap-1 overflow-x-auto no-scrollbar h-full mr-4 flex-1">
                   {tables.filter(t => t.projectId === activeProjectId).map(table => (
@@ -683,20 +684,24 @@ export default function App() {
                 </div>
               </div>
 
-              <GridEngine />
+              {/* View Switcher: Grid or Kanban */}
+              {!activeTableId ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+                   <div className="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center mb-4">
+                     <Database className="w-8 h-8 text-brand-500" />
+                   </div>
+                   <h3 className="text-lg font-bold mb-2">Selecciona una tabla</h3>
+                   <p className="text-slate-500 text-sm max-w-xs">Para ver tus flujos o datos, selecciona una de las pestañas superiores o crea una nueva tabla.</p>
+                </div>
+              ) : (
+                currentTab === 'datos' ? <GridEngine /> : <KanbanEngine tableId={activeTableId} />
+              )}
             </main>
-          )}
-
-          {currentTab === 'automatizaciones' && activeTableId && (
-            <KanbanEngine tableId={activeTableId} />
           )}
 
           {currentTab === 'interfaces' && (
             <CalendarEngine />
           )}
-
-
-
         </div>
 
         {isCreateTableModalOpen && (

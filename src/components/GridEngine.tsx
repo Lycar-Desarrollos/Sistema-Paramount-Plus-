@@ -11,8 +11,8 @@ import { db } from '../firebase';
 
 const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord, activeTable, setAssignmentConfirm, editingCellId, setEditingCellId }: { record: RecordData, column: ColumnDefinition, setIsLinkingRecord: any, setDetailRecord: any, activeTable: any, setAssignmentConfirm: any, editingCellId: string | null, setEditingCellId: (id: string | null) => void }) => {
-  const cellId = `${record.id}-${column.id}`;
+const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetailRecord, activeTable, setAssignmentConfirm, editingCellId, setEditingCellId }: { record: RecordData, column: ColumnDefinition, columnIndex: number, setIsLinkingRecord: any, setDetailRecord: any, activeTable: any, setAssignmentConfirm: any, editingCellId: string | null, setEditingCellId: (id: string | null) => void }) => {
+  const cellId = `cell-${record.id}-${column.id}-${columnIndex}`;
   const editing = editingCellId === cellId;
   const setEditing = (isEditing: boolean) => {
     if (isEditing) setEditingCellId(cellId);
@@ -55,15 +55,24 @@ const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord, acti
       const options = column.config?.options || [];
       const selectedOption = options.find(o => o.label === value);
       return (
-        <td className="p-0 border-r min-w-[150px] group/select relative">
+        <td 
+          className="p-0 border-r min-w-[150px] group/select relative cell-editing-container"
+          data-cell-id={cellId}
+        >
           {editing ? (
-            <div className={`absolute top-0 left-0 w-full min-w-[200px] z-[100] p-2 ${isDarkMode ? 'bg-[#1a1a24] shadow-2xl' : 'bg-white shadow-xl border border-slate-200'} rounded-xl border border-white/5`}>
+            <div 
+              className={`absolute top-0 left-0 w-full min-w-[200px] z-[100] p-2 ${isDarkMode ? 'bg-[#1a1a24] shadow-2xl' : 'bg-white shadow-xl border border-slate-200'} rounded-xl border border-white/5 animate-in zoom-in-95 duration-200`}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto custom-scrollbar">
                 {options.map(opt => (
                   <button 
                     key={opt.label}
-                    onClick={() => handleUpdate(opt.label)}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/5 text-left text-xs font-bold"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUpdate(opt.label);
+                    }}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/5 text-left text-xs font-bold transition-colors"
                   >
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: opt.color }} />
                     {opt.label}
@@ -74,17 +83,20 @@ const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord, acti
             </div>
           ) : (
             <div 
-              onClick={() => setEditing(true)}
-              className="px-3 min-h-[44px] flex items-center gap-2 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditing(true);
+              }}
+              className="px-3 min-h-[44px] flex items-center gap-2 cursor-pointer group-hover/select:bg-white/[0.02] transition-colors"
             >
               {selectedOption ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-white" style={{ backgroundColor: selectedOption.color }}>
+                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-white shadow-sm" style={{ backgroundColor: selectedOption.color }}>
                   {selectedOption.label}
                 </span>
               ) : (
                 <span className="text-slate-500 text-[10px] italic">Sin selección</span>
               )}
-              <ChevronDown className="w-3 h-3 text-slate-500 opacity-0 group-hover/select:opacity-100 ml-auto" />
+              <ChevronDown className="w-3 h-3 text-slate-500 opacity-0 group-hover/select:opacity-100 ml-auto transition-opacity" />
             </div>
           )}
         </td>
@@ -273,13 +285,21 @@ const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord, acti
         selectedEmails = value.split(',').map(v => v.trim().toLowerCase());
       }
 
-      return (
-        <td className="p-0 border-r min-w-[180px] group/user relative">
+      return (        <td 
+          className="p-0 border-r min-w-[180px] group/user relative cell-editing-container"
+          data-cell-id={cellId}
+        >
           {editing ? (
-            <div className={`absolute top-0 left-0 w-full min-w-[240px] z-[100] p-2 ${isDarkMode ? 'bg-[#0f0f15] shadow-[0_20px_50px_rgba(0,0,0,0.5)]' : 'bg-white shadow-2xl border border-slate-200'} rounded-2xl border border-white/5`}>
+            <div 
+              className={`absolute top-0 left-0 w-full min-w-[240px] z-[100] p-2 ${isDarkMode ? 'bg-[#0f0f15] shadow-[0_20px_50px_rgba(0,0,0,0.5)]' : 'bg-white shadow-2xl border border-slate-200'} rounded-2xl border border-white/5 animate-in zoom-in-95 duration-200`}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex flex-col gap-1 max-h-[280px] overflow-y-auto custom-scrollbar">
                 <button 
-                  onClick={() => handleUpdate([])}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleUpdate([]);
+                  }}
                   className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-[10px] font-black uppercase tracking-widest transition-all ${
                     isDarkMode ? 'hover:bg-white/5 text-slate-500 hover:text-white' : 'hover:bg-slate-50 text-slate-400 hover:text-slate-900'
                   }`}
@@ -341,8 +361,11 @@ const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord, acti
             </div>
           ) : (
             <div
-              onClick={() => setEditing(true)}
-              className="px-3 min-h-[44px] flex items-center gap-1 overflow-x-auto custom-scrollbar"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditing(true);
+              }}
+              className="px-3 min-h-[44px] flex items-center gap-1 overflow-x-auto custom-scrollbar cursor-pointer"
             >
               {selectedEmails.length > 0 ? (
                 selectedEmails.map((email, idx) => {
@@ -482,6 +505,23 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
       return unsub;
     }
   }, [activeTableId, initializeTableData]);
+
+  // Global Click-Outside Listener to close editing cells
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (editingCellId) {
+        const target = e.target as HTMLElement;
+        if (!target.closest('.cell-editing-container')) {
+          setEditingCellId(null);
+        }
+      }
+    };
+
+    if (editingCellId) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [editingCellId]);
 
   if (!activeTable && !loading) {
     return (
@@ -713,53 +753,51 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
                 )}
                 {!collapsedGroups.includes(groupKey) && (
                   <>
-                    <AnimatePresence>
-                      {groupRecords.map((rec) => (
-                        <motion.tr 
-                          key={rec.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className={`border-b transition-colors group ${
-                            isDarkMode ? 'border-white/5 hover:bg-white/[0.02]' : 'border-slate-100 hover:bg-slate-50'
-                          }`}
-                        >
-                          <td className="w-[40px] border-r p-0 text-center">
-                            <div className="flex items-center justify-center gap-1 group/row">
-                              <input 
-                                type="checkbox"
-                                checked={selectedIds.includes(rec.id)}
-                                onChange={() => {
-                                  if (selectedIds.includes(rec.id)) setSelectedIds(selectedIds.filter(i => i !== rec.id));
-                                  else setSelectedIds([...selectedIds, rec.id]);
-                                }}
-                                className="accent-brand-500 group-hover/row:hidden"
-                              />
-                              <button
-                                onClick={() => setDetailRecord(rec)}
-                                className="hidden group-hover/row:flex items-center justify-center w-5 h-5 rounded-md hover:bg-brand-500/20 text-slate-500 hover:text-brand-400 transition-all"
-                                title="Ver detalle"
-                              >
-                                <Maximize2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </td>
-                          {(columnDefinitions || []).map(col => (
-                            <DynamicCell 
-                              key={col.id} 
-                              record={rec} 
-                              column={col} 
-                              setIsLinkingRecord={setIsLinkingRecord} 
-                              setDetailRecord={setDetailRecord} 
-                              activeTable={activeTable} 
-                              setAssignmentConfirm={setAssignmentConfirm}
-                              editingCellId={editingCellId}
-                              setEditingCellId={setEditingCellId}
+                    {/* Removed AnimatePresence to prevent duplicate rows during re-renders */}
+                    {groupRecords.map((rec) => (
+                      <tr 
+                        key={rec.id}
+                        className={`border-b transition-colors group ${
+                          isDarkMode ? 'border-white/5 hover:bg-white/[0.02]' : 'border-slate-100 hover:bg-slate-50'
+                        }`}
+                      >
+                        <td className="w-[40px] border-r p-0 text-center">
+                          <div className="flex items-center justify-center gap-1 group/row">
+                            <input 
+                              type="checkbox"
+                              checked={selectedIds.includes(rec.id)}
+                              onChange={() => {
+                                if (selectedIds.includes(rec.id)) setSelectedIds(selectedIds.filter(i => i !== rec.id));
+                                else setSelectedIds([...selectedIds, rec.id]);
+                              }}
+                              className="accent-brand-500 group-hover/row:hidden"
                             />
-                          ))}
-                          <td className="p-0 border-r" />
-                        </motion.tr>
-                      ))}
-                    </AnimatePresence>
+                            <button
+                              onClick={() => setDetailRecord(rec)}
+                              className="hidden group-hover/row:flex items-center justify-center w-5 h-5 rounded-md hover:bg-brand-500/20 text-slate-500 hover:text-brand-400 transition-all"
+                              title="Ver detalle"
+                            >
+                              <Maximize2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </td>
+                        {(columnDefinitions || []).map((col, colIdx) => (
+                          <DynamicCell 
+                            key={`${col.id}-${colIdx}`} 
+                            record={rec} 
+                            column={col} 
+                            columnIndex={colIdx}
+                            setIsLinkingRecord={setIsLinkingRecord} 
+                            setDetailRecord={setDetailRecord} 
+                            activeTable={activeTable} 
+                            setAssignmentConfirm={setAssignmentConfirm}
+                            editingCellId={editingCellId}
+                            setEditingCellId={setEditingCellId}
+                          />
+                        ))}
+                        <td className="p-0 border-r" />
+                      </tr>
+                    ))}
                     
                     {/* Add row per group if grouped, or at bottom if not */}
                     {groupBy && (
