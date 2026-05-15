@@ -13,6 +13,7 @@ import AIChat from './AIChat';
 import { useTheme } from '../context/ThemeContext';
 import { useCampaignStore } from '../store/useCampaignStore';
 import { uploadToCloudinary, getCloudinaryThumbnail } from '../services/cloudinary';
+import { cn } from '../lib/utils';
 
 interface TeamMember {
   id: string;
