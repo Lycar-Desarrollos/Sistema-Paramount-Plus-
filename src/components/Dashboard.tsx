@@ -51,7 +51,7 @@ export default function Dashboard({ onCreateProject, onCreateTable }: { onCreate
     },
     { 
       label: 'Favoritos', 
-      value: projects.filter(p => p.favoriteBy?.includes(user?.email?.toLowerCase())).length, 
+      value: projects.filter(p => p.favoriteBy?.includes(user?.email?.toLowerCase() ?? '')).length, 
       icon: Star, 
       color: 'text-amber-500', 
       bg: 'bg-amber-500/10',
