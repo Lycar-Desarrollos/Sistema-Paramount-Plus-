@@ -13,7 +13,7 @@ export default function KanbanEngine({ tableId }: KanbanEngineProps) {
   const { isDarkMode } = useTheme();
   const tables = useCampaignStore(state => state.tables);
   const table = tables.find(t => t.id === tableId);
-  const records = useCampaignStore(state => state.records[tableId] || []);
+  const records = useCampaignStore(state => state.records.filter((r: any) => r.tableId === tableId));
   const updateRecordField = useCampaignStore(state => state.updateRecordField);
   
   const [draggedRecordId, setDraggedRecordId] = useState<string | null>(null);
@@ -34,10 +34,10 @@ export default function KanbanEngine({ tableId }: KanbanEngineProps) {
     if (!statusCol) return groups;
     
     columns.forEach(opt => {
-      groups[opt.label] = records.filter(r => r.values[statusCol.id] === opt.label);
+      groups[opt.label] = records.filter((r: any) => r.values[statusCol.id] === opt.label);
     });
     // Also include "Sin Estado" if needed
-    const unmatched = records.filter(r => !r.values[statusCol.id]);
+    const unmatched = records.filter((r: any) => !r.values[statusCol.id]);
     if (unmatched.length > 0) {
       groups['Sin Estado'] = unmatched;
     }
@@ -111,7 +111,7 @@ export default function KanbanEngine({ tableId }: KanbanEngineProps) {
                   key={record.id}
                   layoutId={record.id}
                   draggable
-                  onDragStart={(e) => handleDragStart(e, record.id)}
+                  onDragStart={(e: React.DragEvent<HTMLDivElement>) => handleDragStart(e, record.id)}
                   onDragEnd={() => setDraggedRecordId(null)}
                   className={cn(
                     "group relative p-5 rounded-[24px] border cursor-grab active:cursor-grabbing transition-all duration-300",

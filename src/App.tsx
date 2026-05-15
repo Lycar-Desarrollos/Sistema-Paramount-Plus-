@@ -680,7 +680,7 @@ export default function App() {
                 </div>
               </div>
 
-              <GridEngine tableId={activeTableId} />
+              <GridEngine />
             </main>
           )}
 

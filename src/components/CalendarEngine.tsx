@@ -13,7 +13,7 @@ export default function CalendarEngine({ tableId }: CalendarEngineProps) {
   const { isDarkMode } = useTheme();
   const tables = useCampaignStore(state => state.tables);
   const table = tables.find(t => t.id === tableId);
-  const records = useCampaignStore(state => state.records[tableId] || []);
+  const records = useCampaignStore(state => state.records.filter((r: any) => r.tableId === tableId));
   
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -108,7 +108,7 @@ export default function CalendarEngine({ tableId }: CalendarEngineProps) {
         ))}
 
         {calendarDays.map((cell, idx) => {
-          const dayRecords = cell.date ? records.filter(r => {
+          const dayRecords = cell.date ? records.filter((r: any) => {
              const rDate = r.values[dateCol.id] ? new Date(r.values[dateCol.id]) : null;
              return rDate && rDate.getDate() === cell.day && rDate.getMonth() === currentDate.getMonth() && rDate.getFullYear() === currentDate.getFullYear();
           }) : [];
@@ -141,7 +141,7 @@ export default function CalendarEngine({ tableId }: CalendarEngineProps) {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar-thin">
-                {dayRecords.map(rec => (
+                {dayRecords.map((rec: any) => (
                   <div 
                     key={rec.id} 
                     className={cn(

@@ -11,7 +11,7 @@ import { db } from '../firebase';
 
 const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord }: { record: RecordData, column: ColumnDefinition, setIsLinkingRecord: any, setDetailRecord: any }) => {
+const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord, activeTable, setAssignmentConfirm }: { record: RecordData, column: ColumnDefinition, setIsLinkingRecord: any, setDetailRecord: any, activeTable: any, setAssignmentConfirm: any }) => {
   const { isDarkMode } = useTheme();
   const updateRecordField = useCampaignStore(state => state.updateRecordField);
   const value = record.values[column.id];
@@ -436,7 +436,7 @@ const HeaderCell = ({ column, setEditingColumn }: { column: ColumnDefinition, se
   );
 };
 
-export default function GridEngine() {
+export default function GridEngine({ tableId: _tableId }: { tableId?: string } = {}) {
   const { isDarkMode } = useTheme();
   const { userData } = useAuth();
   const { 
@@ -737,7 +737,7 @@ export default function GridEngine() {
                             </div>
                           </td>
                           {(columnDefinitions || []).map(col => (
-                            <DynamicCell key={col.id} record={rec} column={col} setIsLinkingRecord={setIsLinkingRecord} setDetailRecord={setDetailRecord} />
+                            <DynamicCell key={col.id} record={rec} column={col} setIsLinkingRecord={setIsLinkingRecord} setDetailRecord={setDetailRecord} activeTable={activeTable} setAssignmentConfirm={setAssignmentConfirm} />
                           ))}
                           <td className="p-0 border-r" />
                         </motion.tr>
@@ -1398,7 +1398,7 @@ export default function GridEngine() {
                 </button>
                 <button 
                   onClick={async () => {
-                    await useCampaignStore.getState().deleteRecords(activeTableId!, [rejectionConfirm.id]);
+                    await useCampaignStore.getState().deleteRecords([rejectionConfirm.id]);
                     setRejectionConfirm(null);
                     setDetailRecord(null);
                   }}
