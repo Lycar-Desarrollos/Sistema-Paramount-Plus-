@@ -1034,7 +1034,10 @@ export default function HomePage({
 
         <main className="flex-1 overflow-y-auto p-6 bg-transparent">
           {activeSidebarTab === 'Inicio' && !searchQuery ? (
-            <Dashboard />
+            <Dashboard 
+              onCreateProject={onCreateProject} 
+              onCreateTable={onCreateTable} 
+            />
           ) : (
             <>
               <div className="flex items-center justify-between mb-6">

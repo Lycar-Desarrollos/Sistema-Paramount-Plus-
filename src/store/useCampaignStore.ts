@@ -265,6 +265,12 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
       set({ projects: sorted, loading: false });
 
+      if (sorted.length === 0) {
+        set({ tables: [], records: [], activeProjectId: '', activeTableId: '' });
+        unsubTables();
+        return;
+      }
+
       if (sorted.length > 0 && !get().activeProjectId) {
         set({ activeProjectId: sorted[0].id });
       }
