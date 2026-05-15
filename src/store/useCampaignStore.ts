@@ -730,28 +730,30 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
   addColumn: async (tableId: string, name: string, type: ColumnType, config: any = {}, required: boolean = false, hiddenInForm: boolean = false) => {
     try {
-      const tableRef = doc(db, 'tables', tableId);
       const table = get().tables.find(t => t.id === tableId);
       if (!table) return;
 
       const newColumn: ColumnDefinition = {
-        id: Math.random().toString(36).substring(2, 9),
+        id: name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(),
         name,
         type,
         config,
         required,
         hiddenInForm
       };
+
+      const updatedCols = [...(table.columnDefinitions || []), newColumn];
       
-      const updatedColumns = [...get().columnDefinitions, newColumn];
-      
-      // Actualización optimista inmediata
-      set({ columnDefinitions: updatedColumns });
-      
-      await updateDoc(tableRef, {
-        columnDefinitions: updatedColumns
+      await updateDoc(doc(db, 'tables', tableId), {
+        columnDefinitions: updatedCols
       });
+      
+      set(state => ({
+        tables: state.tables.map(t => t.id === tableId ? { ...t, columnDefinitions: updatedCols } : t),
+        columnDefinitions: tableId === state.activeTableId ? updatedCols : state.columnDefinitions
+      }));
     } catch (error: any) {
+      console.error("Error adding column:", error);
       set({ error: error.message });
     }
   },
@@ -931,34 +933,6 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       console.error(error);
     }
   },
-  
-  addColumn: async (tableId: string, name: string, type: ColumnType, config?: any) => {
-    try {
-      const table = get().tables.find(t => t.id === tableId);
-      if (!table) return;
-
-      const newColumn: ColumnDefinition = {
-        id: name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(),
-        name,
-        type,
-        config
-      };
-
-      const updatedCols = [...(table.columnDefinitions || []), newColumn];
-      
-      await updateDoc(doc(db, 'tables', tableId), {
-        columnDefinitions: updatedCols
-      });
-      
-      set(state => ({
-        tables: state.tables.map(t => t.id === tableId ? { ...t, columnDefinitions: updatedCols } : t),
-        columnDefinitions: tableId === state.activeTableId ? updatedCols : state.columnDefinitions
-      }));
-    } catch (error: any) {
-      console.error("Error adding column:", error);
-    }
-  },
-
   deleteTable: async (tableId: string) => {
     try {
       // 1. Seleccionar otra tabla ANTES de borrar para evitar pantalla en blanco
