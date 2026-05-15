@@ -111,8 +111,8 @@ export default function KanbanEngine({ tableId }: KanbanEngineProps) {
                   key={record.id}
                   layoutId={record.id}
                   draggable
-                  onDragStart={(e: React.DragEvent<HTMLDivElement>) => handleDragStart(e, record.id)}
-                  onDragEnd={() => setDraggedRecordId(null)}
+                  onDragStart={(e: any) => handleDragStart(e, record.id)}
+                  onDragEnd={(e: any) => setDraggedRecordId(null)}
                   className={cn(
                     "group relative p-5 rounded-[24px] border cursor-grab active:cursor-grabbing transition-all duration-300",
                     isDarkMode 

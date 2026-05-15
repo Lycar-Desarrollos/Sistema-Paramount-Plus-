@@ -178,6 +178,36 @@ export default function PublicFormView() {
             .filter(Boolean)
             .join('\n');
 
+          const slackPayload = {
+            blocks: [
+              {
+                type: "header",
+                text: { type: "plain_text", text: "🚀 Nueva Solicitud en NaticBox", emoji: true }
+              },
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*Proyecto:* ${projectName}\n*Tabla:* ${tableDef.name}\n*Folio:* \`${folio}\`\n*Cliente:* ${email}`
+                }
+              },
+              { type: "divider" },
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*Detalles:*\n${fieldsSummary || '_Sin detalles adicionales_'}`
+                }
+              },
+              {
+                type: "context",
+                elements: [
+                  { type: "mrkdwn", text: "⚡ Enviado automáticamente por NaticBox" }
+                ]
+              }
+            ]
+          };
+
           // En local (npm run dev) usamos el proxy de Vite
           // En producción usamos la Netlify Function para evitar CORS
           const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
