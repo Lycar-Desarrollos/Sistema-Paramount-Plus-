@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2, Calendar, Link2, ExternalLink, User, ChevronDown, X, Loader2, Maximize2, Rows, List, Paperclip, Upload, FileText } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2, Calendar, Link2, ExternalLink, User, ChevronDown, X, Loader2, Maximize2, Rows, List, Paperclip, Upload, FileText, Send } from 'lucide-react';
 import { useCampaignStore, type ColumnDefinition, type ColumnType, type RecordData } from '../store/useCampaignStore';
 import { cn, hashColor, AVATAR_COLORS } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { uploadToCloudinary, getCloudinaryThumbnail } from '../services/cloudinary';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-const DynamicCell = ({ record, column, setIsLinkingRecord }: { record: RecordData, column: ColumnDefinition, setIsLinkingRecord: any }) => {
+const DynamicCell = ({ record, column, setIsLinkingRecord, setDetailRecord }: { record: RecordData, column: ColumnDefinition, setIsLinkingRecord: any, setDetailRecord: any }) => {
   const { isDarkMode } = useTheme();
   const updateRecordField = useCampaignStore(state => state.updateRecordField);
   const value = record.values[column.id];
@@ -90,7 +92,23 @@ const DynamicCell = ({ record, column, setIsLinkingRecord }: { record: RecordDat
           <div className="px-3 min-h-[44px] flex flex-wrap gap-1.5 py-2 items-center">
             {links.map((link: any, idx: number) => (
               <div key={idx} className="flex items-center gap-1.5 px-2 py-1 bg-brand-500/10 border border-brand-500/20 rounded-lg text-[10px] font-black text-brand-500">
-                <span className="truncate max-w-[80px]">{link.displayValue}</span>
+                <span 
+                  className="truncate max-w-[80px] cursor-pointer hover:underline"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const docRef = doc(db, 'campaigns', link.id);
+                      const docSnap = await getDoc(docRef);
+                      if (docSnap.exists()) {
+                        setDetailRecord({ id: docSnap.id, ...docSnap.data() } as RecordData);
+                      }
+                    } catch (err) {
+                      console.error("Error fetching linked record:", err);
+                    }
+                  }}
+                >
+                  {link.displayValue}
+                </span>
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -280,7 +298,12 @@ const DynamicCell = ({ record, column, setIsLinkingRecord }: { record: RecordDat
                         } else {
                           newSelected = [...selectedEmails, mEmail.toLowerCase()];
                         }
-                        handleUpdate(newSelected);
+                        if (activeTable?.type === 'requests') {
+                          setAssignmentConfirm({ record, colName: column.name, value: newSelected });
+                          setEditing(false);
+                        } else {
+                          handleUpdate(newSelected);
+                        }
                       }}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
                         isSelected 
@@ -430,6 +453,8 @@ export default function GridEngine() {
   // Advanced Column State
   const [newColOptions, setNewColOptions] = useState<{label: string, color: string}[]>([]);
   const [targetTableId, setTargetTableId] = useState('');
+  const [newColRequired, setNewColRequired] = useState(false);
+  const [newColHidden, setNewColHidden] = useState(false);
   const [isLinkingRecord, setIsLinkingRecord] = useState<{recordId: string, colId: string, targetTableId?: string} | null>(null);
   const [targetRecords, setTargetRecords] = useState<RecordData[]>([]);
   const [isFetchingTarget, setIsFetchingTarget] = useState(false);
@@ -438,6 +463,8 @@ export default function GridEngine() {
   const [groupBy, setGroupBy] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [detailRecord, setDetailRecord] = useState<RecordData | null>(null);
+  const [rejectionConfirm, setRejectionConfirm] = useState<RecordData | null>(null);
+  const [assignmentConfirm, setAssignmentConfirm] = useState<{ record: RecordData, colName: string, value: any } | null>(null);
   
   const tables = useCampaignStore(state => state.tables);
   const activeTable = tables.find(t => t.id === activeTableId);
@@ -710,7 +737,7 @@ export default function GridEngine() {
                             </div>
                           </td>
                           {(columnDefinitions || []).map(col => (
-                            <DynamicCell key={col.id} record={rec} column={col} setIsLinkingRecord={setIsLinkingRecord} />
+                            <DynamicCell key={col.id} record={rec} column={col} setIsLinkingRecord={setIsLinkingRecord} setDetailRecord={setDetailRecord} />
                           ))}
                           <td className="p-0 border-r" />
                         </motion.tr>
@@ -819,12 +846,16 @@ export default function GridEngine() {
                   isDarkMode ? 'border-white/5' : 'border-slate-100'
                 }`}>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1">{activeTable?.name}</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1">
+                      {tables.find(t => t.id === detailRecord.tableId)?.name || activeTable?.name}
+                    </p>
                     <h2 className={`text-xl font-black tracking-tight ${
                       isDarkMode ? 'text-white' : 'text-slate-900'
                     }`}>
                       {(() => {
-                        const firstText = cols.find(c => c.type === 'text');
+                        const displayTable = tables.find(t => t.id === detailRecord.tableId) || activeTable;
+                        const currentCols = displayTable?.columnDefinitions || [];
+                        const firstText = currentCols.find(c => c.type === 'text');
                         const val = firstText ? detailRecord.values?.[firstText.id] : null;
                         return val ? String(val) : 'Registro';
                       })()}
@@ -842,17 +873,21 @@ export default function GridEngine() {
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-                  {cols.filter(c => c.type !== 'link').map(col => {
-                    const val = detailRecord.values?.[col.id];
-                    if (val === undefined || val === null || val === '') return null;
+                  {(() => {
+                    const displayTable = tables.find(t => t.id === detailRecord.tableId) || activeTable;
+                    const currentCols = displayTable?.columnDefinitions || [];
+                    
+                    return currentCols.filter(c => c.type !== 'link').map(col => {
+                      const val = detailRecord.values?.[col.id];
+                      if (val === undefined || val === null || val === '') return null;
 
-                    return (
-                      <div key={col.id} className={`flex flex-col gap-2 pb-5 border-b last:border-0 ${
-                        isDarkMode ? 'border-white/5' : 'border-slate-100'
-                      }`}>
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                          {col.name}
-                        </p>
+                      return (
+                        <div key={col.id} className={`flex flex-col gap-2 pb-5 border-b last:border-0 ${
+                          isDarkMode ? 'border-white/5' : 'border-slate-100'
+                        }`}>
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                            {col.name}
+                          </p>
 
                         {/* TEXT / NUMBER / DATE / EMAIL / PHONE */}
                         {['text','number','date','email','phone'].includes(col.type) && (
@@ -940,19 +975,30 @@ export default function GridEngine() {
                             })}
                           </div>
                         )}
-                      </div>
-                    );
-                  })}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
 
                 {/* Footer */}
-                <div className={`px-8 py-4 border-t flex items-center justify-between ${
+                <div className={`px-8 py-4 border-t ${
                   isDarkMode ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'
                 }`}>
-                  <p className="text-[10px] font-mono text-slate-500">ID: {detailRecord.id?.slice(-10)}</p>
-                  <p className="text-[10px] text-slate-500">
-                    {detailRecord.createdAt ? new Date(detailRecord.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
-                  </p>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setRejectionConfirm(detailRecord)}
+                      className="px-4 py-2 rounded-xl bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                    >
+                      Rechazar Solicitud
+                    </button>
+                    <div className="flex items-center gap-4 ml-auto">
+                      <p className="text-[10px] font-mono text-slate-500">ID: {detailRecord.id?.slice(-10)}</p>
+                      <p className="text-[10px] text-slate-500">
+                        {detailRecord.createdAt ? new Date(detailRecord.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             </div>
@@ -1043,10 +1089,16 @@ export default function GridEngine() {
 
                                 const currentLinks = Array.isArray(sourceRecord.values[isLinkingRecord.colId]) ? sourceRecord.values[isLinkingRecord.colId] : [];
                                 if (!currentLinks.find((l: any) => l.id === rec.id)) {
-                                  useCampaignStore.getState().updateRecordField(isLinkingRecord.recordId, isLinkingRecord.colId, [
+                                  const newValue = [
                                     ...currentLinks,
                                     { id: rec.id, displayValue: displayVal }
-                                  ]);
+                                  ];
+                                  if (activeTable?.type === 'requests') {
+                                    const colDef = (columnDefinitions || []).find(c => c.id === isLinkingRecord.colId);
+                                    setAssignmentConfirm({ record: sourceRecord, colName: colDef?.name || 'Vínculo', value: newValue });
+                                  } else {
+                                    useCampaignStore.getState().updateRecordField(isLinkingRecord.recordId, isLinkingRecord.colId, newValue);
+                                  }
                                 }
                                 setIsLinkingRecord(null);
                                 setLinkSearchQuery('');
@@ -1180,6 +1232,27 @@ export default function GridEngine() {
                   </div>
                 )}
 
+                <div className="flex gap-4 pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={newColRequired}
+                      onChange={e => setNewColRequired(e.target.checked)}
+                      className="w-4 h-4 rounded border-white/10 bg-black accent-brand-500"
+                    />
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Obligatorio</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={newColHidden}
+                      onChange={e => setNewColHidden(e.target.checked)}
+                      className="w-4 h-4 rounded border-white/10 bg-black accent-brand-500"
+                    />
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Solo Interno</span>
+                  </label>
+                </div>
+
                 <div className="pt-4 flex gap-3">
                   <button onClick={() => setIsAddingCol(false)} className="flex-1 py-3.5 text-xs font-black text-slate-500 hover:text-white transition-colors">CANCELAR</button>
                   <button 
@@ -1187,9 +1260,11 @@ export default function GridEngine() {
                       if (newColName && activeTableId) {
                         const config = newColType === 'select' ? { options: newColOptions } : 
                                       newColType === 'link' ? { targetTableId } : {};
-                        addColumn(activeTableId, newColName, newColType, config);
+                        useCampaignStore.getState().addColumn(activeTableId, newColName, newColType, config, newColRequired, newColHidden);
                         setIsAddingCol(false);
                         setNewColName('');
+                        setNewColRequired(false);
+                        setNewColHidden(false);
                       }
                     }}
                     className="flex-1 py-3.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-black rounded-2xl transition-all shadow-xl active:scale-95"
@@ -1275,6 +1350,110 @@ export default function GridEngine() {
                     GUARDAR
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── REJECTION MODAL ── */}
+      <AnimatePresence>
+        {rejectionConfirm && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setRejectionConfirm(null)} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className={`relative w-full max-w-md rounded-[32px] p-8 border ${isDarkMode ? 'bg-[#0f0f15] border-white/10' : 'bg-white border-slate-200'}`}>
+              <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-6">
+                <X className="w-8 h-8" />
+              </div>
+              <h3 className={`text-xl font-black mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>RECHAZAR SOLICITUD</h3>
+              <p className="text-sm text-slate-500 font-medium mb-8 leading-relaxed">
+                Al rechazar esta solicitud, el estado cambiará a <strong>"Rechazado"</strong> y se generará un correo profesional para notificar al cliente. ¿Cómo deseas proceder?
+              </p>
+              <div className="space-y-3">
+                <button 
+                  onClick={async () => {
+                    const email = rejectionConfirm.values.email;
+                    const folio = rejectionConfirm.values.folio || 'N/A';
+                    const title = rejectionConfirm.values.title || 'tu solicitud';
+                    
+                    // 1. Actualizar estado a Rechazado
+                    const statusCol = columnDefinitions.find(c => c.id === 'status' || c.name.toLowerCase() === 'estado');
+                    if (statusCol) {
+                      await useCampaignStore.getState().updateRecordField(rejectionConfirm.id, statusCol.id, 'Rechazado');
+                    }
+                    
+                    // 2. Abrir Correo
+                    if (email) {
+                      const subject = encodeURIComponent(`Actualización sobre su solicitud: ${folio}`);
+                      const body = encodeURIComponent(`Hola,\n\nGracias por tu interés en NaticBox. Lamentablemente, tras revisar tu solicitud "${title}" (Folio: ${folio}), hemos determinado que en este momento no cumple con todos los requisitos necesarios para proceder.\n\nAgradecemos tu tiempo y te invitamos a estar pendiente de futuras oportunidades.\n\nSaludos cordiales,\nEl equipo de NaticBox`);
+                      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+                    }
+                    
+                    setRejectionConfirm(null);
+                    setDetailRecord(null);
+                  }}
+                  className="w-full py-4 bg-red-500 hover:bg-red-600 text-white text-xs font-black rounded-2xl transition-all shadow-lg shadow-red-500/20"
+                >
+                  RECHAZAR Y NOTIFICAR POR CORREO
+                </button>
+                <button 
+                  onClick={async () => {
+                    await useCampaignStore.getState().deleteRecords(activeTableId!, [rejectionConfirm.id]);
+                    setRejectionConfirm(null);
+                    setDetailRecord(null);
+                  }}
+                  className="w-full py-4 bg-white/5 hover:bg-white/10 text-red-400 text-xs font-black rounded-2xl transition-all"
+                >
+                  ELIMINAR DEFINITIVAMENTE (SIN CORREO)
+                </button>
+                <button onClick={() => setRejectionConfirm(null)} className="w-full py-3 text-xs font-bold text-slate-500">CANCELAR</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── ASSIGNMENT CONFIRMATION MODAL ── */}
+      <AnimatePresence>
+        {assignmentConfirm && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAssignmentConfirm(null)} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className={`relative w-full max-w-md rounded-[32px] p-8 border ${isDarkMode ? 'bg-[#0f0f15] border-white/10' : 'bg-white border-slate-200 shadow-2xl'}`}>
+              <div className="w-16 h-16 rounded-full bg-brand-500/10 flex items-center justify-center text-brand-500 mb-6">
+                <Send className="w-8 h-8" />
+              </div>
+              <h3 className={`text-xl font-black mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>CONFIRMAR ASIGNACIÓN</h3>
+              <p className="text-sm text-slate-500 font-medium mb-6">
+                Estás a punto de vincular la solicitud <strong className="text-brand-500">{assignmentConfirm.record.values.folio || assignmentConfirm.record.id.slice(-6)}</strong> a <strong className="text-white">{assignmentConfirm.colName}: {Array.isArray(assignmentConfirm.value) ? assignmentConfirm.value.map(v => v.displayValue || v).join(', ') : assignmentConfirm.value}</strong>.
+              </p>
+              
+              <div className={`p-4 rounded-2xl mb-8 ${isDarkMode ? 'bg-white/5' : 'bg-slate-50'}`}>
+                <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Resumen de la solicitud</p>
+                <p className="text-sm font-bold text-white mb-1">{assignmentConfirm.record.values.title || 'Sin título'}</p>
+                <p className="text-xs text-slate-400">{assignmentConfirm.record.values.email}</p>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setAssignmentConfirm(null)} className="flex-1 py-4 text-xs font-black text-slate-500 hover:text-white transition-colors">CANCELAR</button>
+                <button 
+                  onClick={async () => {
+                    const { record, colName, value } = assignmentConfirm;
+                    // Buscar el ID de la columna por nombre o similar (esto es simplificado)
+                    const col = columnDefinitions.find(c => c.name === colName);
+                    if (col) {
+                       await useCampaignStore.getState().updateRecordField(record.id, col.id, value);
+                       // Si asignamos a alguien, cambiamos estado a "Asignado"
+                       const statusCol = columnDefinitions.find(c => c.id === 'status' || c.name.toLowerCase() === 'estado');
+                       if (statusCol) {
+                         await useCampaignStore.getState().updateRecordField(record.id, statusCol.id, 'Asignado');
+                       }
+                    }
+                    setAssignmentConfirm(null);
+                  }}
+                  className="flex-1 py-4 bg-brand-600 hover:bg-brand-500 text-white text-xs font-black rounded-2xl transition-all shadow-xl"
+                >
+                  CONFIRMAR
+                </button>
               </div>
             </motion.div>
           </div>

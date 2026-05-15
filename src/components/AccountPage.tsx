@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Camera, Save, Loader2, User, Mail, Shield, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, Camera, Save, Loader2, User, Mail, Shield, Sun, Moon, Link2 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useTheme } from '../context/ThemeContext';
@@ -28,6 +28,7 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
   const [loading, setLoading] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(userData?.photoURL || user?.photoURL || null);
+  const [slackWebhook, setSlackWebhook] = useState(userData?.slack_webhook || import.meta.env.VITE_SLACK_WEBHOOK_URL || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,6 +61,7 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
       await setDoc(doc(db, 'users', user.uid), {
         displayName: displayName.trim(),
         description: description.trim(),
+        slack_webhook: slackWebhook.trim(),
         ...(finalPhotoUrl && { photoURL: finalPhotoUrl })
       }, { merge: true });
 
@@ -211,6 +213,31 @@ export default function AccountPage({ user, userData, onBack, isProMode, onToggl
                     placeholder="Cuenta algo sobre ti o tu rol en la empresa..."
                   />
                 </div>
+
+                {userData?.role === 'admin' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                      Slack Webhook URL
+                    </label>
+                    <div className="relative">
+                      <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={slackWebhook}
+                        onChange={(e) => setSlackWebhook(e.target.value)}
+                        className={`w-full pl-10 pr-4 py-3 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500 ${
+                          isDarkMode 
+                            ? 'bg-[#0f0f13] border-white/10 text-white focus:border-brand-500' 
+                            : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-brand-500 focus:bg-white'
+                        }`}
+                        placeholder="https://hooks.slack.com/services/..."
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1.5">
+                      Pega aquí tu URL de Webhook de Slack para recibir notificaciones en tiempo real.
+                    </p>
+                  </div>
+                )}
                 
                 <div className="pt-4 border-t border-white/5">
                   <button

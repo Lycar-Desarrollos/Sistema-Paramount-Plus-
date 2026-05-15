@@ -9,6 +9,91 @@ admin.initializeApp();
 const geminiApiKey = functions.config().gemini.api_key;
 const genAI = new GoogleGenerativeAI(geminiApiKey);
 
+// Cloud Function para enviar notificación a Slack cuando se crea un registro en una tabla
+exports.notifySlackOnRecordWrite = functions.firestore
+  .document("tables/{tableId}/records/{recordId}")
+  .onCreate(async (snapshot, context) => {
+    const recordData = snapshot.data();
+    const { tableId } = context.params;
+
+    try {
+      // 1. Obtener datos de la tabla para saber a qué proyecto pertenece
+      const tableDoc = await admin.firestore().collection("tables").doc(tableId).get();
+      if (!tableDoc.exists) return null;
+      
+      const tableData = tableDoc.data();
+      const projectId = tableData.projectId;
+
+      // 2. Obtener datos del proyecto para saber quién es el dueño
+      const projectDoc = await admin.firestore().collection("projects").doc(projectId).get();
+      if (!projectDoc.exists) return null;
+
+      const projectData = projectDoc.data();
+      const ownerId = projectData.userId;
+
+      // 3. Obtener el Slack Webhook del dueño
+      const userDoc = await admin.firestore().collection("users").doc(ownerId).get();
+      if (!userDoc.exists) return null;
+
+      const slackWebhookUrl = userDoc.data().slack_webhook;
+      if (!slackWebhookUrl) return null;
+
+      // 4. Construir el mensaje enriquecido
+      const folio = recordData.values.folio || recordData.id.slice(-6);
+      const email = recordData.values.email || "No proporcionado";
+      
+      const fieldsSummary = tableData.columnDefinitions
+        .filter(c => !c.hiddenInForm && c.id !== 'folio')
+        .map(col => {
+          const val = recordData.values[col.id];
+          if (val === undefined || val === null || val === '') return null;
+          let displayVal = String(val);
+          if (Array.isArray(val)) displayVal = val.map(v => v.name || v.displayValue || v).join(', ');
+          return `• *${col.name}:* ${displayVal}`;
+        })
+        .filter(Boolean)
+        .join('\n');
+
+      const message = {
+        blocks: [
+          {
+            type: "header",
+            text: { type: "plain_text", text: "🚀 Nueva Solicitud en NaticBox", emoji: true }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Proyecto:* ${projectData.name}\n*Tabla:* ${tableData.name}\n*Folio:* \`${folio}\`\n*Cliente:* ${email}`
+            }
+          },
+          { type: "divider" },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Detalles:*\n${fieldsSummary || '_Sin detalles adicionales_'}`
+            }
+          },
+          {
+            type: "context",
+            elements: [{ type: "mrkdwn", text: "⚡ Enviado por Cloud Functions" }]
+          }
+        ]
+      };
+
+      await fetch(slackWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(message)
+      });
+
+    } catch (error) {
+      console.error("Error en notifySlackOnRecordWrite:", error);
+    }
+    return null;
+  });
+
 // Cloud Function para enviar notificación a Slack cuando se crea o actualiza una campaña
 exports.notifySlackOnCampaignWrite = functions.firestore
   .document("campaigns/{campaignId}")

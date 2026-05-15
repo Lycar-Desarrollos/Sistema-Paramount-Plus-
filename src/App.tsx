@@ -1,13 +1,14 @@
 // NaticBox App - Main Entry Point
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Database, Zap as ZapIcon, Layout, FormInput, LogOut, Plus, CheckCircle2, Pencil, Sun, Moon, Download, FileSpreadsheet, FileText, Clipboard, ChevronDown as ChevronDownIcon } from 'lucide-react';
+import { Sparkles, Database, Zap as ZapIcon, Layout, FormInput, LogOut, Plus, CheckCircle2, Pencil, Sun, Moon, Download, FileSpreadsheet, FileText, Clipboard, ChevronDown as ChevronDownIcon, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { UserMenu } from './components/UserMenu';
 import Dashboard from './components/Dashboard';
 import GridEngine from './components/GridEngine';
-import KanbanBoard from './components/KanbanBoard';
+import KanbanEngine from './components/KanbanEngine';
+import CalendarEngine from './components/CalendarEngine';
 import { useToast } from './components/Toast';
 
 import Login from './components/Login';
@@ -26,7 +27,7 @@ import { useTheme } from './context/ThemeContext';
 import { auth } from './firebase';
 import { signOut } from 'firebase/auth';
 
-import { ChevronDown, X, MessageSquare, Globe, Lock } from 'lucide-react';
+import { ChevronDown, X, MessageSquare, Globe, Lock, Calendar } from 'lucide-react';
 import { useCampaignStore, DEFAULT_COLUMNS_V2, DEFAULT_FORM_COLUMNS, type ColumnType } from './store/useCampaignStore';
 
 type MainTab = 'datos' | 'automatizaciones' | 'interfaces' | 'marketing';
@@ -552,10 +553,10 @@ export default function App() {
         <div className="flex-1 flex justify-center h-full">
           <div className="flex items-center space-x-1 h-full">
             {[
-              { id: 'datos', label: 'Datos', icon: Database },
-              { id: 'automatizaciones', label: 'Automatizaciones', icon: ZapIcon },
-              { id: 'interfaces', label: 'Interfaces', icon: Layout },
-              { id: 'marketing', label: 'Marketing', icon: Sparkles }
+              { id: 'datos', label: 'Tabla', icon: Database },
+              { id: 'automatizaciones', label: 'Flujos', icon: ZapIcon },
+              { id: 'interfaces', label: 'Calendario', icon: Calendar },
+              { id: 'marketing', label: 'Insights', icon: Sparkles }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -589,164 +590,110 @@ export default function App() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {currentTab === 'datos' && (
             <main className="flex-1 flex flex-col overflow-hidden relative">
-        <div className={`flex items-center px-6 border-b h-12 transition-colors ${isDarkMode ? 'bg-[#0f0f13]/80 backdrop-blur-sm border-white/5' : 'bg-white/80 backdrop-blur-sm border-slate-200'}`}>
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar h-full mr-4">
-            {tables.filter(t => t.projectId === activeProjectId).map(table => (
-              <div
-                key={table.id}
-                onClick={() => setActiveTableId(table.id)}
-                className={`group relative flex items-center h-full px-5 text-xs font-bold cursor-pointer transition-all border-b-2 ${
-                  activeTableId === table.id
-                    ? (isDarkMode ? 'text-white border-[#f35a1a]' : 'text-slate-900 border-[#f35a1a]')
-                    : (isDarkMode ? 'text-slate-500 border-transparent hover:text-slate-300' : 'text-slate-500 border-transparent hover:text-slate-900')
-                }`}
-              >
-                <span>{table.name}</span>
-
-                {table.type === 'requests' && !table.isInitial && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      /* Botón COPIAR LINK movido a la pestaña de cada tabla */
-                      const url = `${window.location.origin}/form/${table.id}`;
-                      navigator.clipboard.writeText(url).then(() => {
-                        showToast('Link de formulario copiado', 'info');
-                      });
-                    }}
-                    className={`ml-2 p-1 rounded-md transition-all hover:bg-emerald-500/10 text-emerald-500`}
-                    title="Copiar link del formulario"
-                  >
-                    <Globe className="w-3 h-3" />
-                  </button>
-                )}
-                
-                <div className="flex items-center ml-2 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDialogConfig({
-                        isOpen: true,
-                        title: 'Renombrar tabla',
-                        message: 'Ingresa el nuevo nombre para esta tabla:',
-                        type: 'prompt',
-                        defaultValue: table.name,
-                        onConfirm: (newName) => {
-                          if (newName) updateTable(table.id, newName);
-                        }
-                      });
-                    }}
-                    className={`p-1 rounded-md transition-colors ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
-                  >
-                    <Pencil className="w-3 h-3 text-slate-500" />
-                  </button>
-                  {tables.length > 1 && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDialogConfig({
-                          isOpen: true,
-                          title: 'Eliminar tabla',
-                          message: '¿Estás seguro de que deseas eliminar esta tabla permanentemente? Esta acción no se puede deshacer.',
-                          type: 'danger',
-                          confirmText: 'Eliminar',
-                          onConfirm: () => deleteTable(table.id)
-                        });
-                      }}
-                      className={`p-1 rounded-md transition-colors ${isDarkMode ? 'hover:bg-red-500/10 hover:text-red-500' : 'hover:bg-red-50 hover:text-red-600'}`}
+              <div className={`flex items-center px-6 border-b h-12 transition-colors ${isDarkMode ? 'bg-[#0f0f13]/80 backdrop-blur-sm border-white/5' : 'bg-white/80 backdrop-blur-sm border-slate-200'}`}>
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar h-full mr-4 flex-1">
+                  {tables.filter(t => t.projectId === activeProjectId).map(table => (
+                    <div
+                      key={table.id}
+                      onClick={() => setActiveTableId(table.id)}
+                      className={`group relative flex items-center h-full px-5 text-xs font-bold cursor-pointer transition-all border-b-2 ${
+                        activeTableId === table.id
+                          ? (isDarkMode ? 'text-white border-brand-500 bg-brand-500/5' : 'text-slate-900 border-brand-500 bg-brand-50')
+                          : (isDarkMode ? 'text-slate-500 border-transparent hover:text-slate-300' : 'text-slate-500 border-transparent hover:text-slate-900')
+                      }`}
                     >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
+                      <span>{table.name}</span>
+
+                      {table.type === 'requests' && !table.isInitial && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const url = `${window.location.origin}/form/${table.id}`;
+                            navigator.clipboard.writeText(url).then(() => {
+                              showToast('Link de formulario copiado', 'info');
+                            });
+                          }}
+                          className={`ml-2 p-1 rounded-md transition-all hover:bg-emerald-500/10 text-emerald-500`}
+                          title="Copiar link del formulario"
+                        >
+                          <Globe className="w-3 h-3" />
+                        </button>
+                      )}
+                      
+                      <div className="flex items-center ml-2 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDialogConfig({
+                              isOpen: true,
+                              title: 'Renombrar tabla',
+                              message: 'Ingresa el nuevo nombre para esta tabla:',
+                              type: 'prompt',
+                              defaultValue: table.name,
+                              onConfirm: (newName) => {
+                                if (newName) updateTable(table.id, newName);
+                              }
+                            });
+                          }}
+                          className={`p-1 rounded-md transition-colors ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
+                        >
+                          <Pencil className="w-3 h-3 text-slate-500" />
+                        </button>
+                        {tables.length > 1 && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDialogConfig({
+                                isOpen: true,
+                                title: 'Eliminar tabla',
+                                message: '¿Estás seguro de que deseas eliminar esta tabla permanentemente?',
+                                type: 'confirm',
+                                onConfirm: () => deleteTable(table.id)
+                              });
+                            }}
+                            className={`p-1 rounded-md transition-colors ${isDarkMode ? 'hover:bg-red-500/10 hover:text-red-500' : 'hover:bg-red-50'}`}
+                          >
+                            <Trash2 className="w-3 h-3 text-slate-500" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => setIsCreateTableModalOpen(true)} className={`flex items-center gap-1.5 px-4 h-full text-xs font-black uppercase tracking-widest transition-all border-b-2 border-transparent ${isDarkMode ? 'text-slate-500 hover:text-white hover:bg-white/5' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`}>
+                    <Plus className="w-3.5 h-3.5" />
+                    Nueva
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setShowExportMenu(!showExportMenu)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      isDarkMode 
+                        ? 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white' 
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900'
+                    }`}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Exportar</span>
+                  </button>
                 </div>
               </div>
-            ))}
-            
-            <button 
-              onClick={() => setIsCreateTableModalOpen(true)}
-              className={`flex items-center gap-2 px-4 h-full text-xs font-bold transition-all border-b-2 border-transparent ${
-                isDarkMode ? 'text-slate-500 hover:text-brand-400 hover:bg-white/5' : 'text-slate-500 hover:text-brand-600 hover:bg-slate-50'
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              <span>Nueva tabla</span>
-            </button>
-          </div>
 
-          <div className="flex-1"></div>
-
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                isDarkMode 
-                  ? 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white' 
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900'
-              } ${showExportMenu ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-slate-200 text-slate-900') : ''}`}
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Exportar</span>
-              <ChevronDownIcon className={`w-3 h-3 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
-            </button>
-
-            {showExportMenu && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setShowExportMenu(false)}></div>
-                <div className={`absolute right-0 mt-2 w-48 rounded-xl shadow-2xl z-40 border animate-in fade-in zoom-in-95 duration-200 ${
-                  isDarkMode ? 'bg-[#1a1a24] border-white/10 shadow-black' : 'bg-white border-slate-200 shadow-slate-200'
-                }`}>
-                  <div className="p-1.5 space-y-0.5">
-                    <button
-                      onClick={() => handleExport('xlsx')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
-                        isDarkMode ? 'hover:bg-white/5 text-slate-300 hover:text-white' : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-                      Excel (.xlsx)
-                    </button>
-                    <button
-                      onClick={() => handleExport('csv')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
-                        isDarkMode ? 'hover:bg-white/5 text-slate-300 hover:text-white' : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <FileText className="w-4 h-4 text-brand-500" />
-                      CSV (.csv)
-                    </button>
-                    <div className={`h-px my-1 ${isDarkMode ? 'bg-white/5' : 'bg-slate-100'}`}></div>
-                    <button
-                      onClick={() => handleExport('copy')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
-                        isDarkMode ? 'hover:bg-white/5 text-slate-300 hover:text-white' : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <Clipboard className="w-4 h-4 text-slate-400" />
-                      Copiar datos
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-              <GridEngine />
+              <GridEngine tableId={activeTableId} />
             </main>
           )}
-          {currentTab === 'interfaces' && (
-             <div className="p-8 h-full overflow-y-auto">
-               <GalleryView />
-             </div>
+
+          {currentTab === 'automatizaciones' && activeTableId && (
+            <KanbanEngine tableId={activeTableId} />
           )}
-          {currentTab === 'automatizaciones' && (
-             <div className="h-full">
-               <KanbanBoard />
-             </div>
+
+          {currentTab === 'interfaces' && activeTableId && (
+            <CalendarEngine tableId={activeTableId} />
           )}
+
           {currentTab === 'marketing' && (
-             <div className="h-full overflow-hidden">
-               <MarketingHub />
-             </div>
+            <MarketingHub />
           )}
 
         </div>

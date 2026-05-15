@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useCampaignStore } from '../store/useCampaignStore';
 import { uploadToCloudinary } from '../services/cloudinary';
 import { Loader2, CheckCircle2, Upload, FileText, Send, X, Image, File as FileIcon, AlertCircle } from 'lucide-react';
 import type { ColumnDefinition } from '../store/useCampaignStore';
@@ -108,21 +109,121 @@ export default function PublicFormView() {
       }
       setUploadProgress('Guardando respuestas...');
 
+      // 2. Intentar obtener datos del proyecto y usuario (puede fallar por permisos en formularios públicos)
+      let ownerId = tableDef.ownerId || tableDef.userId || '';
+      let projectName = tableDef.name || 'NaticBox';
+      // Fallbacks en orden: (1) tabla tiene webhook, (2) env variable, (3) buscar en Firestore
+      let webhookUrl: string = tableDef.slack_webhook || import.meta.env.VITE_SLACK_WEBHOOK_URL || '';
+
+      try {
+        const projSnap = await getDoc(doc(db, 'projects', tableDef.projectId));
+        if (projSnap.exists()) {
+          const projData = projSnap.data();
+          ownerId = projData.userId || ownerId;
+          projectName = projData.name || projectName;
+          
+          const userSnap = await getDoc(doc(db, 'users', ownerId));
+          if (userSnap.exists() && userSnap.data().slack_webhook) {
+            webhookUrl = userSnap.data().slack_webhook;
+          }
+        }
+      } catch (e) {
+        console.warn('Permisos restringidos — usando fallback de webhook desde .env o tabla.');
+      }
+
+      // Generar folio si es necesario
+      let generatedFolio = finalData.folio;
+      if (tableDef.columnDefinitions.some((c: any) => c.id === 'folio') && !generatedFolio) {
+        generatedFolio = `NT-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
+      }
+
+      // 3. Guardar en Firestore (incluyendo owner para disparar Cloud Functions)
       await addDoc(collection(db, 'campaigns'), {
         tableId: tableDef.id,
         workspaceId: tableDef.projectId,
         projectId: tableDef.projectId,
+        owner: ownerId, // Crucial para que la Cloud Function encuentre el webhook
+        createdBy: ownerId,
         values: {
           ...finalData,
-          ...(tableDef.columnDefinitions.some((c: any) => c.id === 'folio') && !finalData.folio ? {
-            folio: `NT-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`
-          } : {})
+          ...(generatedFolio ? { folio: generatedFolio } : {})
         },
         createdAt: Date.now(),
         updatedAt: Date.now(),
         source: 'public_form',
         submittedAt: new Date().toISOString(),
       });
+
+      setUploadProgress('Notificando al equipo...');
+
+      // 4. Enviar notificación a Slack vía Proxy (opcional, pero asegura entrega desde local)
+      if (webhookUrl) {
+        try {
+          const folio = generatedFolio || 'N/A';
+          const email = finalData.email || 'No proporcionado';
+
+          // Construir resumen de todos los campos
+          const fieldsSummary = tableDef.columnDefinitions
+            .filter((c: any) => !c.hiddenInForm && c.id !== 'folio')
+            .map((col: any) => {
+              const val = finalData[col.id];
+              if (val === undefined || val === null || val === '') return null;
+              
+              let displayVal = String(val);
+              if (Array.isArray(val)) {
+                displayVal = val.map((v: any) => v.name || v.displayValue || v).join(', ');
+              }
+              return `• *${col.name}:* ${displayVal}`;
+            })
+            .filter(Boolean)
+            .join('\n');
+
+          // En local usamos el proxy de Vite para evitar CORS
+          // En producción llamamos directamente a Slack
+          const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const slackEndpoint = isLocal
+            ? webhookUrl.replace('https://hooks.slack.com', '/slack-proxy')
+            : webhookUrl;
+
+          const slackPayload = {
+            blocks: [
+              {
+                type: "header",
+                text: { type: "plain_text", text: "🚀 Nueva Solicitud en NaticBox", emoji: true }
+              },
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*Proyecto:* ${projectName}\n*Tabla:* ${tableDef.name}\n*Folio:* \`${folio}\`\n*Cliente:* ${email}`
+                }
+              },
+              { type: "divider" },
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*Detalles:*\n${fieldsSummary || '_Sin detalles adicionales_'}`
+                }
+              },
+              {
+                type: "context",
+                elements: [
+                  { type: "mrkdwn", text: "⚡ Enviado automáticamente por NaticBox" }
+                ]
+              }
+            ]
+          };
+
+          await fetch(slackEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(slackPayload),
+          });
+        } catch (slackErr) {
+          console.error('Error sending Slack notification:', slackErr);
+        }
+      }
 
       setSuccess(true);
     } catch (err: any) {
@@ -206,7 +307,7 @@ export default function PublicFormView() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 sm:p-10 space-y-8">
           {(tableDef?.columnDefinitions || []).map((col: ColumnDefinition) => {
-            if (col.type === 'user' || col.type === 'link' || col.id === 'folio') return null;
+            if (col.type === 'user' || col.type === 'link' || col.hiddenInForm || col.id === 'folio') return null;
 
             return (
               <div key={col.id} className="space-y-2">

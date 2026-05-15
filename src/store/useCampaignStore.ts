@@ -40,6 +40,7 @@ export interface ColumnDefinition {
     targetTableId?: string; // Para Linked Records
   };
   required?: boolean;
+  hiddenInForm?: boolean;
 }
 
 export type TableType = 'general' | 'requests';
@@ -67,6 +68,15 @@ export interface RecordData {
 export const DEFAULT_CATEGORIES = ['Priority (L)', 'Moderate (M)', 'Tentpole (XL)', 'Social Media', 'Branding'];
 
 export const MARKETING_REQUEST_COLUMNS: ColumnDefinition[] = [
+  { id: 'status', name: 'Estado', type: 'select', hiddenInForm: true, config: { 
+    options: [
+      { label: 'Pendiente', color: '#64748b' },
+      { label: 'En Revisión', color: '#3b82f6' },
+      { label: 'Asignado', color: '#8b5cf6' },
+      { label: 'Rechazado', color: '#ef4444' },
+      { label: 'Completado', color: '#10b981' }
+    ]
+  }},
   { id: 'folio', name: 'Folio', type: 'text' },
   { id: 'email', name: 'Correo Electrónico', type: 'email', required: true },
   { id: 'title', name: 'Title', type: 'text' },
@@ -110,6 +120,15 @@ export const DEFAULT_COLUMNS_V2: ColumnDefinition[] = [
 ];
 
 export const DEFAULT_FORM_COLUMNS: ColumnDefinition[] = [
+  { id: 'status', name: 'Estado', type: 'select', hiddenInForm: true, config: { 
+    options: [
+      { label: 'Pendiente', color: '#64748b' },
+      { label: 'En Revisión', color: '#3b82f6' },
+      { label: 'Asignado', color: '#8b5cf6' },
+      { label: 'Rechazado', color: '#ef4444' },
+      { label: 'Completado', color: '#10b981' }
+    ]
+  }},
   { id: 'folio', name: 'Folio', type: 'text' },
   { id: 'email', name: 'Correo Electrónico', type: 'email', required: true },
   { id: 'title', name: 'Título de la solicitud', type: 'text' },
@@ -153,7 +172,7 @@ interface CampaignStore {
   updateRecord: (id: string, values: Record<string, any>) => Promise<void>;
   updateRecordField: (id: string, field: string, value: any) => Promise<void>;
   deleteRecords: (ids: string[]) => Promise<void>;
-  addColumn: (tableId: string, name: string, type: ColumnType, config?: any) => Promise<void>;
+  addColumn: (tableId: string, name: string, type: ColumnType, config?: any, required?: boolean, hiddenInForm?: boolean) => Promise<void>;
   deleteColumn: (tableId: string, columnId: string) => Promise<void>;
   updateColumnConfig: (tableId: string, columnId: string, config: any) => Promise<void>;
   updateColumn: (tableId: string, columnId: string, updates: Partial<ColumnDefinition>) => Promise<void>;
@@ -522,13 +541,16 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       }));
 
       // 2. Guardamos en Firebase en segundo plano
-      const { setDoc } = await import('firebase/firestore');
+      const user = auth.currentUser;
+      const ownerId = user?.uid || '';
+
       await setDoc(tableRef, {
         projectId,
         name,
         type,
         columnDefinitions: columns,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        ownerId: ownerId
       });
 
       // 3. Crear 10 filas por defecto
@@ -537,7 +559,6 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
         return acc;
       }, {} as Record<string, any>);
 
-      const user = auth.currentUser;
       const email = user?.email || 'System';
 
       const promises = Array.from({ length: 10 }).map((_, i) => {
@@ -641,14 +662,19 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     }
   },
 
-  addColumn: async (tableId: string, name: string, type: ColumnType, config?: any) => {
+  addColumn: async (tableId: string, name: string, type: ColumnType, config: any = {}, required: boolean = false, hiddenInForm: boolean = false) => {
     try {
       const tableRef = doc(db, 'tables', tableId);
+      const table = get().tables.find(t => t.id === tableId);
+      if (!table) return;
+
       const newColumn: ColumnDefinition = {
-        id: `col_${Date.now()}`,
+        id: Math.random().toString(36).substring(2, 9),
         name,
         type,
-        config: config || {}
+        config,
+        required,
+        hiddenInForm
       };
       
       const updatedColumns = [...get().columnDefinitions, newColumn];
