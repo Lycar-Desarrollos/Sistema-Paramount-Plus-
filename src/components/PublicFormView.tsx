@@ -178,48 +178,28 @@ export default function PublicFormView() {
             .filter(Boolean)
             .join('\n');
 
-          // En local usamos el proxy de Vite para evitar CORS
-          // En producción llamamos directamente a Slack
+          // En local (npm run dev) usamos el proxy de Vite
+          // En producción usamos la Netlify Function para evitar CORS
           const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-          const slackEndpoint = isLocal
-            ? webhookUrl.replace('https://hooks.slack.com', '/slack-proxy')
-            : webhookUrl;
-
-          const slackPayload = {
-            blocks: [
-              {
-                type: "header",
-                text: { type: "plain_text", text: "🚀 Nueva Solicitud en NaticBox", emoji: true }
-              },
-              {
-                type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text: `*Proyecto:* ${projectName}\n*Tabla:* ${tableDef.name}\n*Folio:* \`${folio}\`\n*Cliente:* ${email}`
-                }
-              },
-              { type: "divider" },
-              {
-                type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text: `*Detalles:*\n${fieldsSummary || '_Sin detalles adicionales_'}`
-                }
-              },
-              {
-                type: "context",
-                elements: [
-                  { type: "mrkdwn", text: "⚡ Enviado automáticamente por NaticBox" }
-                ]
-              }
-            ]
-          };
-
-          await fetch(slackEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(slackPayload),
-          });
+          
+          if (isLocal) {
+            const localProxyUrl = webhookUrl.replace('https://hooks.slack.com', '/slack-proxy');
+            await fetch(localProxyUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(slackPayload),
+            });
+          } else {
+            const functionEndpoint = '/.netlify/functions/send-slack';
+            await fetch(functionEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                webhookUrl: webhookUrl,
+                payload: slackPayload
+              }),
+            });
+          }
         } catch (slackErr) {
           console.error('Error sending Slack notification:', slackErr);
         }
