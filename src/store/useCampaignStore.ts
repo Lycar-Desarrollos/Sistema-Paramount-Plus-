@@ -149,7 +149,7 @@ export const DEFAULT_FORM_COLUMNS: ColumnDefinition[] = [
   { id: 'assets', name: 'Archivos de Referencia', type: 'attachment' },
 ];
 
-export type UserRole = 'admin' | 'colaborador';
+export type UserRole = 'admin' | 'colaborador' | 'proveedor';
 
 interface CampaignStore {
   activeProjectId: string;
@@ -385,7 +385,39 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
             if (change.type === 'removed') allRecsMap.delete(change.doc.id);
           });
 
-          set({ allProjectRecords: Array.from(allRecsMap.values()) });
+          let filteredRecs = Array.from(allRecsMap.values());
+          const currentUser = auth.currentUser;
+          const MASTER_ADMIN_UID = "RXH1eN22BtUAdJBrK4bPR3AxiO52";
+          const isMasterAdmin = currentUser?.uid === MASTER_ADMIN_UID;
+
+          let isAdmin = false;
+          if (currentUser && !isMasterAdmin) {
+            const { allUsers } = get();
+            const userDoc = allUsers.find((u: any) => u.email?.toLowerCase() === currentUser.email?.toLowerCase()) as any;
+            if (userDoc) {
+              isAdmin = userDoc.role === 'admin';
+            }
+          }
+
+          if (!isAdmin && !isMasterAdmin && currentUser?.email) {
+            const myEmail = currentUser.email.toLowerCase();
+            filteredRecs = filteredRecs.filter(record => {
+              if (record.createdBy?.toLowerCase() === myEmail) return true;
+
+              const table = get().tables.find(t => t.id === record.tableId);
+              const userCols = (table?.columnDefinitions || []).filter(c => c.type === 'user');
+
+              return userCols.some(col => {
+                const val = record.values?.[col.id];
+                if (!val) return false;
+                if (typeof val === 'string') return val.toLowerCase() === myEmail;
+                if (Array.isArray(val)) return val.some((v: string) => v?.toLowerCase() === myEmail);
+                return false;
+              });
+            });
+          }
+
+          set({ allProjectRecords: filteredRecs });
         });
         unsubs.push(u);
       });
@@ -403,25 +435,31 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     const tablesQuery = query(collection(db, 'tables'), where('projectId', '==', projectId));
 
     const unsubscribeTables = onSnapshot(tablesQuery, (snapshot) => {
-      const tablesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Table[];
-      const sorted = tablesData.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      const newTables = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Table[];
+
+      // Merge with existing tables (keep other projects' tables from initializeGlobal)
+      // Use a Map to deduplicate by id — last write wins per table.
+      const existingTables = get().tables;
+      const mergedMap = new Map<string, Table>();
+      existingTables.forEach(t => mergedMap.set(t.id, t));
+      newTables.forEach(t => mergedMap.set(t.id, t));
+      const sorted = Array.from(mergedMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
       // Check BEFORE overwriting store — the current tables may have optimistic entries
       // (e.g. a table just created that hasn't been confirmed by Firebase yet).
       const currentActiveId = get().activeTableId;
-      const currentTables = get().tables; // may include optimistic entries
-      const activeTableMeta = currentTables.find(t => t.id === currentActiveId);
+      const activeTableMeta = existingTables.find(t => t.id === currentActiveId);
       // The active table belongs to this project if it appears in either the snapshot
       // (confirmed) or the optimistic store state with the same projectId.
       const activeTableBelongsToProject =
-        sorted.find(t => t.id === currentActiveId) ||
+        newTables.find(t => t.id === currentActiveId) ||
         (activeTableMeta?.projectId === projectId);
 
       set({ tables: sorted });
 
-      // Only auto-select the first table if we have no valid table for this project
-      if (sorted.length > 0 && !activeTableBelongsToProject) {
-        set({ activeTableId: sorted[0].id });
+      // Only auto-select the first table of this project if we have no valid table for it
+      if (newTables.length > 0 && !activeTableBelongsToProject) {
+        set({ activeTableId: newTables.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0].id });
       }
 
       set({ loading: false });
@@ -500,19 +538,23 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       if (!isAdmin && !isMasterAdmin && currentUser?.email) {
         const myEmail = currentUser.email.toLowerCase();
         const userCols = (table?.columnDefinitions || []).filter(c => c.type === 'user');
-        if (userCols.length > 0) {
-          const filtered = sorted.filter(record =>
-            userCols.some(col => {
-              const val = record.values?.[col.id];
-              if (!val) return false;
-              if (typeof val === 'string') return val.toLowerCase() === myEmail;
-              if (Array.isArray(val)) return val.some((v: string) => v?.toLowerCase() === myEmail);
-              return false;
-            })
-          );
-          set({ records: filtered });
-          return;
-        }
+        
+        const filtered = sorted.filter(record => {
+          // Si crearon el registro, siempre pueden verlo
+          if (record.createdBy?.toLowerCase() === myEmail) return true;
+          
+          // De lo contrario, deben estar asignados en alguna columna de usuario
+          return userCols.some(col => {
+            const val = record.values?.[col.id];
+            if (!val) return false;
+            if (typeof val === 'string') return val.toLowerCase() === myEmail;
+            if (Array.isArray(val)) return val.some((v: string) => v?.toLowerCase() === myEmail);
+            return false;
+          });
+        });
+        
+        set({ records: filtered });
+        return;
       }
 
       set({ records: sorted });

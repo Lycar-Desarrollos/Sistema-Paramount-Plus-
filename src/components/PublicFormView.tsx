@@ -358,7 +358,8 @@ export default function PublicFormView() {
 
                 {/* DATE */}
                 {col.type === 'date' && (
-                  <input type="date" required={col.required} className={inputCls}
+                  <input type="date" required={col.required} className={`${inputCls} custom-date-input`}
+                    min={new Date().toISOString().split('T')[0]}
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
                   />

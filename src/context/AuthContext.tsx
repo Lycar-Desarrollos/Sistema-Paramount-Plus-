@@ -4,7 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
-export type UserRole = 'admin' | 'colaborador';
+export type UserRole = 'admin' | 'colaborador' | 'proveedor';
 
 interface UserData {
   role: UserRole;

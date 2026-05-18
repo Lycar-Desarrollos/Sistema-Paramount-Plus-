@@ -19,7 +19,7 @@ service cloud.firestore {
     // Solo admins pueden listar y modificar todos los usuarios.
     // Un colaborador solo puede leer y actualizar su propio documento (ej. foto de perfil).
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isAdmin() || isMasterAdmin() || request.auth.uid == userId);
+      allow read: if isAuthenticated();
       allow write: if isAuthenticated() && (isAdmin() || isMasterAdmin() || request.auth.uid == userId);
     }
 

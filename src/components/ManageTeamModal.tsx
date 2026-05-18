@@ -173,6 +173,7 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
                   >
                     <option value="admin">Administrador</option>
                     <option value="colaborador">Colaborador</option>
+                    <option value="proveedor">Proveedor</option>
                   </select>
                 </div>
                 <div className="flex items-end">
@@ -205,7 +206,7 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
                         <div className="min-w-0">
                           <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{member.email}</p>
                           <p className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                            {member.role === 'admin' ? 'Propietario' : 'Colaborador'}
+                            {member.role === 'admin' ? 'Propietario' : member.role === 'proveedor' ? 'Proveedor' : 'Colaborador'}
                           </p>
                         </div>
                       </div>
@@ -219,6 +220,7 @@ export default function ManageTeamModal({ onClose, currentUserEmail }: ManageTea
                         >
                           <option value="admin">Admin</option>
                           <option value="colaborador">Colaborador</option>
+                          <option value="proveedor">Proveedor</option>
                         </select>
                         <button 
                           onClick={() => handleDeleteMember(member.id, member.email)}

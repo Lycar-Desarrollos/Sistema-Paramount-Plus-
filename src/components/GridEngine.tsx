@@ -14,7 +14,18 @@ const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpp
 const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetailRecord, activeTable, setAssignmentConfirm, editingCellId, setEditingCellId }: { record: RecordData, column: ColumnDefinition, columnIndex: number, setIsLinkingRecord: any, setDetailRecord: any, activeTable: any, setAssignmentConfirm: any, editingCellId: string | null, setEditingCellId: (id: string | null) => void }) => {
   const cellId = `cell-${record.id}-${column.id}-${columnIndex}`;
   const editing = editingCellId === cellId;
+  const { userData } = useAuth();
+  const isProveedor = userData?.role === 'proveedor';
+  // Proveedores can edit: 'select' (status), 'link' type columns,
+  // AND any text column whose name includes 'link' or 'url'
+  const colNameLower = column.name.toLowerCase();
+  const proveedorCanEdit =
+    column.type === 'select' ||
+    column.type === 'link' ||
+    colNameLower.includes('link') ||
+    colNameLower.includes('url');
   const setEditing = (isEditing: boolean) => {
+    if (isProveedor && !proveedorCanEdit) return;
     if (isEditing) setEditingCellId(cellId);
     else if (editing) setEditingCellId(null);
   };
@@ -39,11 +50,13 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
       return (
         <td className="p-0 border-r text-center w-[50px]">
           <button 
-            onClick={() => handleUpdate(!value)}
+            onClick={() => { if (!isProveedor) handleUpdate(!value); }}
             className={cn(
               "w-5 h-5 rounded border transition-all flex items-center justify-center mx-auto",
-              value ? "bg-brand-500 border-brand-500 text-white" : "border-slate-500/30 hover:border-brand-500/50"
+              value ? "bg-brand-500 border-brand-500 text-white" : "border-slate-500/30 hover:border-brand-500/50",
+              isProveedor && "cursor-default opacity-50 hover:border-slate-500/30"
             )}
+            disabled={isProveedor}
           >
             {value && <CheckCircle2 className="w-3.5 h-3.5" />}
           </button>
@@ -127,14 +140,16 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
                 >
                   {link.displayValue}
                 </span>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const newLinks = links.filter((_: any, i: number) => i !== idx);
-                    updateRecordField(record.id, column.id, newLinks);
-                  }}
-                  className="hover:text-red-500"
-                ><X className="w-2.5 h-2.5" /></button>
+                {!isProveedor && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const newLinks = links.filter((_: any, i: number) => i !== idx);
+                      updateRecordField(record.id, column.id, newLinks);
+                    }}
+                    className="hover:text-red-500"
+                  ><X className="w-2.5 h-2.5" /></button>
+                )}
               </div>
             ))}
             {links.length === 0 && (
@@ -170,13 +185,29 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
     case 'date': {
       return (
         <td className="p-0 border-r min-w-[140px]">
-          <div className="px-3 min-h-[44px] flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-slate-500" />
+          <div 
+            className="px-3 min-h-[44px] flex items-center gap-2 cursor-pointer group"
+            onClick={(e) => {
+              if (isProveedor) return;
+              const input = e.currentTarget.querySelector('input');
+              if (input && input.showPicker) {
+                try { input.showPicker(); } catch (err) {}
+              }
+            }}
+          >
+            <Calendar className="w-3.5 h-3.5 text-slate-500 group-hover:text-brand-500 transition-colors" />
             <input 
               type="date"
               value={value || ''}
+              disabled={isProveedor}
+              min={new Date().toISOString().split('T')[0]}
               onChange={(e) => handleUpdate(e.target.value)}
-              className="bg-transparent text-xs font-bold outline-none border-none text-slate-400"
+              className="bg-transparent text-xs font-bold outline-none border-none text-slate-400 disabled:opacity-50 custom-date-input w-full cursor-pointer"
+              onClick={(e) => {
+                if (e.currentTarget.showPicker) {
+                  try { e.currentTarget.showPicker(); } catch (err) {}
+                }
+              }}
             />
           </div>
         </td>
@@ -228,15 +259,17 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
                       className="w-8 h-8 rounded-lg object-cover border border-white/10 hover:border-brand-500 transition-all hover:scale-110 cursor-zoom-in shadow"
                     />
                   </a>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleUpdate(attachments.filter((_: any, i: number) => i !== idx));
-                    }}
-                    className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity shadow"
-                  >
-                    <X className="w-2 h-2" />
-                  </button>
+                  {!isProveedor && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUpdate(attachments.filter((_: any, i: number) => i !== idx));
+                      }}
+                      className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity shadow"
+                    >
+                      <X className="w-2 h-2" />
+                    </button>
+                  )}
                 </div>
               ) : (
                 // FILE CHIP (pdf, doc, etc.)
@@ -249,23 +282,27 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
                   <a href={file.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[80px] hover:text-brand-500 transition-colors">
                     {file.name}
                   </a>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleUpdate(attachments.filter((_: any, i: number) => i !== idx));
-                    }}
-                    className="hover:text-red-500 opacity-0 group-hover/file:opacity-100 transition-opacity"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
+                  {!isProveedor && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUpdate(attachments.filter((_: any, i: number) => i !== idx));
+                      }}
+                      className="hover:text-red-500 opacity-0 group-hover/file:opacity-100 transition-opacity"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  )}
                 </div>
               )
             ))}
 
-            <label className="cursor-pointer p-1.5 rounded-lg hover:bg-brand-500/10 text-slate-500 hover:text-brand-500 transition-all flex-shrink-0">
-              {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              <input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={handleFileUpload} />
-            </label>
+            {!isProveedor && (
+              <label className="cursor-pointer p-1.5 rounded-lg hover:bg-brand-500/10 text-slate-500 hover:text-brand-500 transition-all flex-shrink-0">
+                {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                <input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={handleFileUpload} />
+              </label>
+            )}
           </div>
         </td>
       );
@@ -337,8 +374,12 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
                           : (isDarkMode ? 'hover:bg-brand-500/10 hover:text-white' : 'hover:bg-slate-50')
                       }`}
                     >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0 ${hashColor(mEmail, AVATAR_COLORS)}`}>
-                        {mName[0].toUpperCase()}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0 overflow-hidden ${!mMatch?.photoURL ? hashColor(mEmail, AVATAR_COLORS) : ''}`}>
+                        {mMatch?.photoURL ? (
+                          <img src={mMatch.photoURL} alt={mName} className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          mName[0].toUpperCase()
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className={`text-[11px] font-black truncate ${isSelected ? (isDarkMode ? 'text-white' : 'text-brand-900') : ''}`}>{mName}</p>
@@ -376,9 +417,14 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
                     <div
                       key={idx}
                       title={email}
-                      className={`h-6 rounded-full flex items-center gap-1.5 px-1.5 border border-white/5 shrink-0 ${hashColor(email, AVATAR_COLORS)}`}
+                      className={`h-6 rounded-full flex items-center justify-center px-1.5 border border-white/5 shrink-0 overflow-hidden ${!match?.photoURL ? hashColor(email, AVATAR_COLORS) : ''}`}
+                      style={{ minWidth: '24px' }}
                     >
-                      <span className="text-[9px] font-black text-white ml-0.5">{initials}</span>
+                      {match?.photoURL ? (
+                        <img src={match.photoURL} alt={name} className="w-6 h-6 object-cover absolute rounded-full" />
+                      ) : (
+                        <span className="text-[9px] font-black text-white">{initials}</span>
+                      )}
                     </div>
                   );
                 })
@@ -396,7 +442,10 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
       );
     }
 
-    default: // text or unknown
+    default: { // text or unknown
+      const isUrl = typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('www.'));
+      const isLinkCol = column.name.toLowerCase().includes('link') || column.name.toLowerCase().includes('url');
+      const canEdit = !isProveedor || isLinkCol;
       return (
         <td className="p-0 border-r min-w-[200px] relative group/cell">
           {editing ? (
@@ -406,18 +455,40 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
               onChange={e => setLocalVal(e.target.value)}
               onBlur={() => handleUpdate(localVal)}
               onKeyDown={e => e.key === 'Enter' && handleUpdate(localVal)}
+              placeholder={isLinkCol ? 'https://...' : 'Escribe aquí...'}
               className={`w-full h-full min-h-[44px] absolute inset-0 px-3 text-xs font-bold outline-none border-none ${isDarkMode ? 'bg-brand-500/10 text-white' : 'bg-white text-slate-900 shadow-inner'}`}
             />
           ) : (
-            <div
-              onClick={() => setEditing(true)}
-              className="px-3 min-h-[44px] flex items-center text-xs font-bold truncate max-w-[300px]"
-            >
-              {value || <span className="text-slate-700 italic font-normal">Pulsa para editar</span>}
+            <div className="px-3 min-h-[44px] flex items-center text-xs font-bold truncate max-w-[300px] gap-2">
+              {value ? (
+                isUrl ? (
+                  <a
+                    href={value.startsWith('http') ? value : `https://${value}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    onDoubleClick={e => { e.preventDefault(); if (canEdit) setEditing(true); }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-brand-500/10 border border-brand-500/20 rounded-lg text-brand-400 hover:text-brand-300 hover:bg-brand-500/20 transition-all truncate max-w-[220px]"
+                  >
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{value}</span>
+                  </a>
+                ) : (
+                  <span onClick={() => canEdit && setEditing(true)} className={canEdit ? 'cursor-pointer truncate' : 'truncate'}>{value}</span>
+                )
+              ) : (
+                <span
+                  onClick={() => canEdit && setEditing(true)}
+                  className={`italic font-normal ${canEdit ? 'text-slate-600 cursor-pointer' : 'text-slate-700 cursor-default'}`}
+                >
+                  {isLinkCol ? 'Pegar link...' : 'Pulsa para editar'}
+                </span>
+              )}
             </div>
           )}
         </td>
       );
+    }
   }
 };
 
@@ -447,18 +518,22 @@ const HeaderCell = ({ column, setEditingColumn }: { column: ColumnDefinition, se
         <span className="opacity-50">{getIcon()}</span>
         <span className="text-[11px] font-black uppercase tracking-widest truncate">{column.name}</span>
         <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-          <button 
-            onClick={() => setEditingColumn(column)}
-            className="p-1 hover:text-brand-500 transition-all"
-          >
-            <Settings className="w-3 h-3" />
-          </button>
-          <button 
-            onClick={() => activeTableId && deleteColumn(activeTableId, column.id)}
-            className="p-1 hover:text-red-500 transition-all"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
+          {useAuth().userData?.role !== 'proveedor' && (
+            <>
+              <button 
+                onClick={() => setEditingColumn(column)}
+                className="p-1 hover:text-brand-500 transition-all"
+              >
+                <Settings className="w-3 h-3" />
+              </button>
+              <button 
+                onClick={() => activeTableId && deleteColumn(activeTableId, column.id)}
+                className="p-1 hover:text-red-500 transition-all"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </th>
@@ -550,8 +625,32 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
     }
   }, [isLinkingRecord]);
 
+  const isRestrictedRole = userData?.role === 'colaborador' || userData?.role === 'proveedor';
+  const currentUserEmail = userData?.email?.toLowerCase() || '';
+
+  // Columns of type 'user' — used to find assigned rows
+  const userColumns = columnDefinitions.filter(c => c.type === 'user');
+
   const filteredRecords = records.filter(rec => {
     if (!rec || !rec.values) return false;
+
+    // ── Row-Level Security ──────────────────────────────────────────────────
+    // Colaboradores and Proveedores only see rows where their email is assigned
+    if (isRestrictedRole && currentUserEmail) {
+      const isAssigned = userColumns.some(col => {
+        const val = rec.values[col.id];
+        if (!val) return false;
+        if (Array.isArray(val)) {
+          return val.some(v => String(v).toLowerCase() === currentUserEmail);
+        }
+        if (typeof val === 'string') {
+          return val.split(',').map(s => s.trim().toLowerCase()).includes(currentUserEmail);
+        }
+        return false;
+      });
+      if (!isAssigned) return false;
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     const values = Object.values(rec.values).map(v => 
       typeof v === 'object' ? JSON.stringify(v) : String(v)
@@ -628,21 +727,23 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
           
           {/* Botón COPIAR LINK movido a la pestaña de cada tabla en App.tsx */}
 
-          <button 
-            onClick={() => {
-              if (!activeTableId) return;
-              const initialValues: Record<string, any> = {};
-              if (userData && userData.role !== 'admin') {
-                const userCol = (columnDefinitions || []).find(c => c.type === 'user');
-                if (userCol) initialValues[userCol.id] = userData.email;
-              }
-              addRecord(activeTableId, initialValues);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-brand-600/20 active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            NUEVO REGISTRO
-          </button>
+          {userData?.role !== 'proveedor' && (
+            <button 
+              onClick={() => {
+                if (!activeTableId) return;
+                const initialValues: Record<string, any> = {};
+                if (userData && userData.role !== 'admin') {
+                  const userCol = (columnDefinitions || []).find(c => c.type === 'user');
+                  if (userCol) initialValues[userCol.id] = userData.email;
+                }
+                addRecord(activeTableId, initialValues);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-brand-600/20 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              NUEVO REGISTRO
+            </button>
+          )}
 
           <div className="flex items-center gap-1 border-l border-white/5 pl-4 ml-2">
             <div className="relative group/menu">
@@ -681,7 +782,7 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
         </div>
 
         <div className="flex items-center gap-2">
-          {selectedIds.length > 0 && (
+          {selectedIds.length > 0 && userData?.role !== 'proveedor' && (
             <button 
               onClick={() => {
                 deleteRecords(selectedIds);
@@ -713,13 +814,15 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
                 <HeaderCell key={col.id} column={col} setEditingColumn={setEditingColumn} />
               ))}
               <th className="p-0 min-w-[120px]">
-                <button 
-                  onClick={() => setIsAddingCol(true)}
-                  className="w-full h-[44px] flex items-center justify-center gap-2 text-slate-500 hover:text-brand-500 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Columna</span>
-                </button>
+                {useAuth().userData?.role !== 'proveedor' && (
+                  <button 
+                    onClick={() => setIsAddingCol(true)}
+                    className="w-full h-[44px] flex items-center justify-center gap-2 text-slate-500 hover:text-brand-500 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Columna</span>
+                  </button>
+                )}
               </th>
             </tr>
           </thead>
@@ -800,7 +903,7 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
                     ))}
                     
                     {/* Add row per group if grouped, or at bottom if not */}
-                    {groupBy && (
+                    {groupBy && userData?.role !== 'proveedor' && (
                       <tr 
                         onClick={() => {
                           if (!activeTableId) return;
@@ -828,7 +931,7 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
             ))}
 
             {/* Global add row at the very bottom if not grouped */}
-            {!groupBy && filteredRecords.length > 0 && (
+            {!groupBy && filteredRecords.length > 0 && userData?.role !== 'proveedor' && (
               <tr 
                 onClick={() => {
                   if (!activeTableId) return;

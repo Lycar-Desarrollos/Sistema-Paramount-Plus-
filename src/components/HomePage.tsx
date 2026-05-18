@@ -73,7 +73,7 @@ export default function HomePage({
   const [inlineMemberEmail, setInlineMemberEmail] = useState('');
   const [inlineAddingMember, setInlineAddingMember] = useState('');
 
-  const { isAiOpen, setIsAiOpen, toggleFavoriteProject, isSidebarCollapsed, setIsSidebarCollapsed, setActiveProjectId, allUsers } = useCampaignStore();
+  const { isAiOpen, setIsAiOpen, toggleFavoriteProject, isSidebarCollapsed, setIsSidebarCollapsed, setActiveProjectId, allUsers, allProjectRecords } = useCampaignStore();
 
   const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -114,8 +114,32 @@ export default function HomePage({
 
   // tables belonging to the currently selected project
   const projectTables = useMemo(() => {
-    return tables.filter(t => t.projectId === selectedProjectId);
-  }, [tables, selectedProjectId]);
+    // Deduplicate — two Firestore listeners (global + per-project) can write duplicates
+    const uniqueTables = Array.from(new Map(tables.map(t => [t.id, t])).values());
+    const allProjectTablesList = uniqueTables.filter(t => t.projectId === selectedProjectId);
+    
+    // For restricted roles, only show tables where the user is assigned in at least one row
+    const isRestrictedRole = userData?.role === 'colaborador' || userData?.role === 'proveedor';
+    const currentEmail = userData?.email?.toLowerCase() || '';
+    
+    if (!isRestrictedRole || !currentEmail) return allProjectTablesList;
+    
+    return allProjectTablesList.filter(table => {
+      const userCols = table.columnDefinitions.filter(c => c.type === 'user');
+      if (userCols.length === 0) return false;
+      
+      const tableRecords = allProjectRecords.filter(r => r.tableId === table.id);
+      return tableRecords.some(rec =>
+        userCols.some(col => {
+          const val = rec.values[col.id];
+          if (!val) return false;
+          if (Array.isArray(val)) return val.some(v => String(v).toLowerCase() === currentEmail);
+          if (typeof val === 'string') return val.split(',').map(s => s.trim().toLowerCase()).includes(currentEmail);
+          return false;
+        })
+      );
+    });
+  }, [tables, selectedProjectId, userData, allProjectRecords]);
 
   // filtered projects based on search and tab
   const filteredProjects = useMemo(() => {
@@ -179,32 +203,61 @@ export default function HomePage({
           )}
         </div>
 
-        <nav className="space-y-1.5 w-full">
+        <nav className="space-y-1.5 w-full mt-4">
           {[
             { icon: Grid3X3, label: 'Inicio',     active: activeSidebarTab === 'Inicio', onClick: () => { setActiveSidebarTab('Inicio'); setSelectedProjectId(null); } },
-            ...(userData?.role === 'admin' || user?.email === 'admin@natic.com' ? [{ icon: Users, label: 'Equipo', active: false, onClick: onManageTeam }] : []),
             { icon: Star,     label: 'Favoritos',   active: activeSidebarTab === 'Favoritos', onClick: () => { setActiveSidebarTab('Favoritos'); setSelectedProjectId(null); } },
             { icon: Clock,    label: 'Recientes',   active: activeSidebarTab === 'Recientes', onClick: () => { setActiveSidebarTab('Recientes'); setSelectedProjectId(null); } },
-            { icon: Users,    label: 'Compartidos', active: activeSidebarTab === 'Compartidos', onClick: () => { setActiveSidebarTab('Compartidos'); setSelectedProjectId(null); } },
           ].map((item) => (
             <button
               key={item.label}
               onClick={item.onClick}
-              className={`w-full flex items-center gap-3 rounded-xl text-xs font-bold transition-all relative group ${
-                isSidebarCollapsed ? 'justify-center py-3 px-0' : 'px-4 py-2.5'
-              } ${
+              className={cn(
+                "w-full flex items-center gap-3 rounded-[14px] text-xs font-black transition-all duration-300 relative group overflow-hidden",
+                isSidebarCollapsed ? 'justify-center py-3 px-0' : 'px-4 py-3.5',
                 item.active 
-                  ? (isDarkMode ? 'bg-brand-500/10 text-brand-400' : 'bg-brand-50 text-brand-600')
-                  : (isDarkMode ? 'text-slate-500 hover:bg-white/5 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900')
-              }`}
+                  ? (isDarkMode ? 'text-white' : 'text-brand-600')
+                  : (isDarkMode ? 'text-slate-500 hover:text-slate-200' : 'text-slate-500 hover:text-slate-900')
+              )}
               title={isSidebarCollapsed ? item.label : ''}
             >
-              <item.icon className={`w-4 h-4 shrink-0 ${item.active ? (isDarkMode ? 'text-brand-400' : 'text-brand-600') : 'text-current opacity-70'}`} />
-              {!isSidebarCollapsed && (
-                <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{item.label}</motion.span>
+              {/* Active Background - Glassmorphism glow */}
+              {item.active && (
+                <motion.div 
+                  layoutId="activeSidebarTabBg" 
+                  className={cn(
+                    "absolute inset-0 z-0 border",
+                    isDarkMode ? "bg-brand-500/10 border-brand-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]" : "bg-brand-50 border-brand-100 shadow-sm"
+                  )}
+                  style={{ borderRadius: '14px' }}
+                />
               )}
+              
+              {/* Hover Background */}
+              {!item.active && (
+                <div className={cn(
+                  "absolute inset-0 z-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-[14px]",
+                  isDarkMode ? "bg-white/[0.03]" : "bg-slate-50"
+                )} />
+              )}
+
+              <item.icon className={cn(
+                "w-4 h-4 shrink-0 relative z-10 transition-transform duration-300",
+                item.active ? (isDarkMode ? 'text-brand-400' : 'text-brand-600') : 'text-current opacity-70 group-hover:scale-110'
+              )} />
+              
+              {!isSidebarCollapsed && (
+                <motion.span 
+                  initial={{ opacity: 0 }} 
+                  animate={{ opacity: 1 }}
+                  className="relative z-10 tracking-widest uppercase text-[10px]"
+                >
+                  {item.label}
+                </motion.span>
+              )}
+              
               {isSidebarCollapsed && item.active && (
-                <motion.div layoutId="activeTab" className="absolute left-0 w-1 h-6 bg-brand-500 rounded-r-full" />
+                <motion.div layoutId="activeTabIndicator" className="absolute left-0 w-1 h-6 bg-brand-500 rounded-r-full z-10" />
               )}
             </button>
           ))}
@@ -265,18 +318,7 @@ export default function HomePage({
         </div>
       </div>
 
-      <div className={`mt-auto p-6 ${isSidebarCollapsed ? 'px-0 flex flex-col items-center' : ''} space-y-2`}>
-        <button 
-          onClick={onLogout}
-          className={`w-full flex items-center gap-3 rounded-xl text-xs font-bold transition-all ${
-            isSidebarCollapsed ? 'justify-center py-4 px-0' : 'px-4 py-2.5'
-          } ${isDarkMode ? 'text-slate-500 hover:bg-red-500/10 hover:text-red-400' : 'text-slate-500 hover:bg-red-50 hover:text-red-600'}`}
-          title={isSidebarCollapsed ? 'Cerrar sesión' : ''}
-        >
-          <LogOut className="w-4 h-4 shrink-0" />
-          {!isSidebarCollapsed && <span>Cerrar sesión</span>}
-        </button>
-      </div>
+
     </motion.aside>
   );
 
@@ -377,13 +419,15 @@ export default function HomePage({
 
 
 
-              <button 
-                onClick={() => onCreateTable(selectedProject.id)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-brand-600/20 active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                Nueva tabla
-              </button>
+              {userData?.role !== 'proveedor' && (
+                <button 
+                  onClick={() => onCreateTable(selectedProject.id)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-brand-600/20 active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nueva tabla
+                </button>
+              )}
             </div>
 
           </div>
@@ -463,18 +507,20 @@ export default function HomePage({
                                     Abrir tabla
                                   </button>
                                   <div className={`my-1 h-px ${isDarkMode ? 'bg-white/5' : 'bg-slate-100'}`} />
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      setDeleteConfirm({ id: table.id, name: table.name, type: 'table' });
-                                      setOpenMenuTableId(null);
-                                    }}
-                                    className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                    Eliminar tabla
-                                  </button>
+                                  {userData?.role !== 'proveedor' && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setDeleteConfirm({ id: table.id, name: table.name, type: 'table' });
+                                        setOpenMenuTableId(null);
+                                      }}
+                                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      Eliminar tabla
+                                    </button>
+                                  )}
                                 </motion.div>
                               )}
                             </AnimatePresence>
@@ -510,16 +556,18 @@ export default function HomePage({
                           >
                             <Star className="w-3.5 h-3.5" fill={table.favoriteBy?.includes(user?.email?.toLowerCase() || '') ? 'currentColor' : 'none'} />
                           </button>
-                          <button
-                            onClick={e => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setDeleteConfirm({ id: table.id, name: table.name, type: 'table' });
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {userData?.role !== 'proveedor' && (
+                            <button
+                              onClick={e => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setDeleteConfirm({ id: table.id, name: table.name, type: 'table' });
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -535,9 +583,11 @@ export default function HomePage({
                         <p className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>No hay tablas en este espacio</p>
                         <p className="text-xs text-slate-500 mt-1">Crea tu primera tabla para empezar a organizar datos.</p>
                       </div>
-                      <button onClick={() => onCreateTable(selectedProject.id)} className="px-6 py-2.5 bg-brand-600 text-white text-xs font-bold rounded-xl shadow-lg hover:bg-brand-500 transition-all active:scale-95">
-                        Nueva tabla
-                      </button>
+                      {userData?.role !== 'proveedor' && (
+                        <button onClick={() => onCreateTable(selectedProject.id)} className="px-6 py-2.5 bg-brand-600 text-white text-xs font-bold rounded-xl shadow-lg hover:bg-brand-500 transition-all active:scale-95">
+                          Nueva tabla
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -737,7 +787,7 @@ export default function HomePage({
                                   {isCurrentUser ? (userData?.displayName || 'Tú') : displayName}
                                 </p>
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                                  {role === 'owner' ? 'Propietario' : 'Colaborador'}
+                                  {role === 'owner' ? 'Propietario' : role === 'proveedor' ? 'Proveedor' : 'Colaborador'}
                                 </p>
                               </div>
                               {userData?.role === 'admin' && !isCurrentUser && (
@@ -878,7 +928,7 @@ export default function HomePage({
                               <div className="min-w-0">
                                 <p className="text-xs font-bold text-white truncate">{email === user?.email?.toLowerCase() ? 'Tú' : email}</p>
                                 <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">
-                                  {role === 'owner' ? 'Propietario' : role === 'admin' ? 'Admin' : 'Colaborador'}
+                                  {role === 'owner' ? 'Propietario' : role === 'admin' ? 'Admin' : role === 'proveedor' ? 'Proveedor' : 'Colaborador'}
                                 </p>
                               </div>
                             </div>
@@ -1016,27 +1066,40 @@ export default function HomePage({
           </div>
         </header>
 
-        <div className={`h-14 flex items-center justify-between px-6 border-b flex-shrink-0 transition-colors ${isDarkMode ? 'bg-[#0f0f13] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
-          <div className="flex items-center gap-4">
-            <h1 className={`text-sm font-bold tracking-tight truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-              {activeSidebarTab === 'Inicio' ? 'Panel de Control' : 'Espacios de trabajo'}
-            </h1>
-          </div>
+        {activeSidebarTab !== 'Inicio' && (
+          <div className={`h-14 flex items-center justify-between px-6 border-b flex-shrink-0 transition-colors ${isDarkMode ? 'bg-[#0f0f13] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div className="flex items-center gap-4">
+              <h1 className={`text-sm font-bold tracking-tight truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                Espacios de trabajo
+              </h1>
+            </div>
 
-          <div className="w-1/4 flex items-center justify-end gap-3">
-
-            <button onClick={onCreateProject} className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-brand-600/20 active:scale-95">
-              <Plus className="w-4 h-4" />
-              Nuevo espacio
-            </button>
+            <div className="w-1/4 flex items-center justify-end gap-3">
+              {userData?.role !== 'proveedor' && (
+                <button onClick={onCreateProject} className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-brand-600/20 active:scale-95">
+                  <Plus className="w-4 h-4" />
+                  Nuevo espacio
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         <main className="flex-1 overflow-y-auto p-6 bg-transparent">
           {activeSidebarTab === 'Inicio' && !searchQuery ? (
             <Dashboard 
               onCreateProject={onCreateProject} 
               onCreateTable={onCreateTable} 
+              userData={userData}
+              onOpenProject={(id) => {
+                setActiveProjectId(id);
+                onOpenProject(id);
+              }}
+              onOpenTable={(projectId, tableId) => {
+                setActiveProjectId(projectId);
+                onOpenTable(projectId, tableId);
+              }}
+              onNavigateTab={(tab) => setActiveSidebarTab(tab)}
             />
           ) : (
             <>
@@ -1140,18 +1203,20 @@ export default function HomePage({
                                   {proj.favoriteBy?.includes(user?.email?.toLowerCase()) ? 'Quitar favorito' : 'Agregar a favoritos'}
                                 </button>
                                 <div className={`my-1 h-px ${isDarkMode ? 'bg-white/5' : 'bg-slate-100'}`} />
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setDeleteConfirm({ id: proj.id, name: proj.name, type: 'project' });
-                                    setOpenMenuProjectId(null);
-                                  }}
-                                  className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Eliminar espacio
-                                </button>
+                                  {userData?.role !== 'proveedor' && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setDeleteConfirm({ id: proj.id, name: proj.name, type: 'project' });
+                                        setOpenMenuProjectId(null);
+                                      }}
+                                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      Eliminar espacio
+                                    </button>
+                                  )}
                               </motion.div>
                             )}
                           </AnimatePresence>
@@ -1235,16 +1300,18 @@ export default function HomePage({
                         >
                           <Star className={`w-4 h-4 ${proj.favoriteBy && proj.favoriteBy.includes(user?.email?.toLowerCase()) ? 'fill-current' : ''}`} />
                         </button>
-                        <button 
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            setDeleteConfirm({ id: proj.id, name: proj.name, type: 'project' });
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-all"
-                          title="Eliminar espacio"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {userData?.role !== 'proveedor' && (
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setDeleteConfirm({ id: proj.id, name: proj.name, type: 'project' });
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-all"
+                            title="Eliminar espacio"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

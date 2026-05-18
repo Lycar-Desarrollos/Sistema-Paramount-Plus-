@@ -88,3 +88,24 @@
     background-color: #475569;
   }
 }
+
+/* Custom Date Input Styles */
+input.custom-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.5;
+  transition: all 0.2s ease-in-out;
+  padding: 6px;
+  border-radius: 50%;
+  background-color: transparent;
+}
+input.custom-date-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background-color: rgba(139, 92, 246, 0.1);
+}
+.dark input.custom-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+.dark input.custom-date-input::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(139, 92, 246, 0.2);
+}
+

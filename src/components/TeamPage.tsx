@@ -196,7 +196,7 @@ function MemberCard({ member, user, userData, isDarkMode, cardBg, textTitle, onR
           <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
             member.role === 'admin' ? 'bg-brand-500/10 text-brand-500 border border-brand-500/20' : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
           }`}>
-            {member.role === 'admin' ? 'Propietario' : 'Colaborador'}
+            {member.role === 'admin' ? 'Propietario' : member.role === 'proveedor' ? 'Proveedor' : 'Colaborador'}
           </span>
         </div>
 
@@ -521,7 +521,7 @@ export default function TeamPage({ onBack, user, userData, isProMode, onTogglePr
                   className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-black rounded-xl transition-all shadow-lg shadow-brand-600/20"
                 >
                   <Plus className="w-4 h-4" />
-                  Nuevo Colaborador
+                  Nuevo Usuario
                 </button>
               </div>
             )}
@@ -584,19 +584,14 @@ export default function TeamPage({ onBack, user, userData, isProMode, onTogglePr
                         Colaboradores
                       </h2>
                       <span className="px-2 py-0.5 rounded-md bg-white/5 text-slate-500 text-[10px] font-bold">
-                        {members.length}
+                        {members.filter(m => m.role !== 'proveedor').length}
                       </span>
                     </div>
-                    <button 
-                      onClick={() => { setIsCreating(true); setNewRole('colaborador'); }}
-                      className={`p-1.5 rounded-xl transition-all ${isDarkMode ? 'hover:bg-white/5 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {members.map(member => (
+                    {members.filter(m => m.role !== 'proveedor').map(member => (
                       <MemberCard
                         key={member.id}
                         member={member}
@@ -611,6 +606,44 @@ export default function TeamPage({ onBack, user, userData, isProMode, onTogglePr
                         onManageWorkspaces={(m) => setAssigningMember(m)}
                       />
                     ))}
+                  </div>
+                </div>
+
+                {/* SECCIÓN PROVEEDORES */}
+                <div className="space-y-4 pt-8 border-t border-white/5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <h2 className={`text-xs font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        Proveedores
+                      </h2>
+                      <span className="px-2 py-0.5 rounded-md bg-white/5 text-slate-500 text-[10px] font-bold">
+                        {members.filter(m => m.role === 'proveedor').length}
+                      </span>
+                    </div>
+
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {members.filter(m => m.role === 'proveedor').map(member => (
+                      <MemberCard
+                        key={member.id}
+                        member={member}
+                        user={user}
+                        userData={userData}
+                        isDarkMode={isDarkMode}
+                        cardBg={cardBg}
+                        textTitle={textTitle}
+                        onResetPassword={(id, email) => { setResetUserId(id); setResetUserEmail(email); setResetPassword(''); }}
+                        onDelete={(id, email) => handleDelete(id, email)}
+                        onPhotoUpdated={(id, photoURL) => setMembers(prev => prev.map(m => m.id === id ? { ...m, photoURL } : m))}
+                        onManageWorkspaces={(m) => setAssigningMember(m)}
+                      />
+                    ))}
+                    {members.filter(m => m.role === 'proveedor').length === 0 && (
+                      <div className="col-span-full py-8 text-center border-2 border-dashed border-white/5 rounded-2xl">
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">No hay proveedores registrados</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -644,7 +677,7 @@ export default function TeamPage({ onBack, user, userData, isProMode, onTogglePr
                     </div>
                     <div>
                       <h3 className={`text-xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        Nuevo Colaborador
+                        Nuevo Usuario
                       </h3>
                       <p className="text-xs text-slate-500 font-medium">Configura el acceso al sistema</p>
                     </div>
@@ -697,6 +730,7 @@ export default function TeamPage({ onBack, user, userData, isProMode, onTogglePr
                       >
                         <option value="admin">Administrador</option>
                         <option value="colaborador">Colaborador</option>
+                        <option value="proveedor">Proveedor</option>
                       </select>
                     </div>
                   </div>

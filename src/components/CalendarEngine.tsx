@@ -294,9 +294,31 @@ export default function CalendarEngine() {
                           isDarkMode ? "bg-white/[0.02] border-white/5" : "bg-slate-50 border-slate-100"
                         )}>
                           <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-500">{key}</span>
-                          <span className={cn("text-xs font-bold", isDarkMode ? "text-slate-300" : "text-slate-700")}>
-                            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                          </span>
+                          <div className={cn("text-xs font-bold", isDarkMode ? "text-slate-300" : "text-slate-700")}>
+                            {Array.isArray(value) ? (
+                              value.length === 0 ? (
+                                <span className="opacity-50 italic">Sin asignar</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                  {value.map((v: any, i: number) => {
+                                    const text = v?.displayValue || v?.name || v?.email || (typeof v === 'string' ? v : JSON.stringify(v));
+                                    return (
+                                      <span key={i} className={cn(
+                                        "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest",
+                                        isDarkMode ? "bg-white/10 text-white" : "bg-slate-200 text-slate-800"
+                                      )}>
+                                        {text}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )
+                            ) : typeof value === 'object' && value !== null ? (
+                              <span>{value.displayValue || value.name || JSON.stringify(value)}</span>
+                            ) : (
+                              <span>{String(value || '') || <span className="opacity-50 italic">Vacío</span>}</span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}

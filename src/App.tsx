@@ -1,5 +1,5 @@
 // NaticBox App - Main Entry Point
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Database, Zap as ZapIcon, Layout, FormInput, LogOut, Plus, CheckCircle2, Pencil, Sun, Moon, Download, FileSpreadsheet, FileText, Clipboard, ChevronDown as ChevronDownIcon, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -91,11 +91,40 @@ export default function App() {
     triggerAiSimulation,
     isSidebarCollapsed, setIsSidebarCollapsed,
     isAiOpen, setIsAiOpen,
-    loading: dataLoading 
+    loading: dataLoading,
+    allProjectRecords
   } = useCampaignStore();
   
   const activeProject = projects.find(p => p.id === activeProjectId) || projects[0] || { id: '', name: 'Cargando...' };
   const activeTable = tables.find(t => t.id === activeTableId) || tables[0] || { id: '', name: 'Sin tablas', columnDefinitions: [] };
+
+  // ── Role-Based Table Visibility ───────────────────────────────────────────
+  // Collaborators and providers only see tables where they are assigned to at
+  // least one row via a 'user'-type column.
+  const visibleTables = useMemo(() => {
+    // Deduplicate first — multiple Firestore listeners can write the same table twice
+    const uniqueTables = Array.from(new Map(tables.map(t => [t.id, t])).values());
+    const projectTables = uniqueTables.filter(t => t.projectId === activeProjectId);
+    const isRestricted = userData?.role === 'colaborador' || userData?.role === 'proveedor';
+    const currentEmail = userData?.email?.toLowerCase() || '';
+    if (!isRestricted || !currentEmail) return projectTables;
+
+    return projectTables.filter(table => {
+      const userCols = table.columnDefinitions.filter(c => c.type === 'user');
+      if (userCols.length === 0) return false;
+      const tableRecords = allProjectRecords.filter(r => r.tableId === table.id);
+      return tableRecords.some(rec =>
+        userCols.some(col => {
+          const val = rec.values[col.id];
+          if (!val) return false;
+          if (Array.isArray(val)) return val.some(v => String(v).toLowerCase() === currentEmail);
+          if (typeof val === 'string') return val.split(',').map(s => s.trim().toLowerCase()).includes(currentEmail);
+          return false;
+        })
+      );
+    });
+  }, [tables, activeProjectId, userData, allProjectRecords]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     localStorage.setItem('natic_show_home', JSON.stringify(showHome));
@@ -473,24 +502,26 @@ export default function App() {
                   );
                 })}
 
-                <button 
-                  onClick={() => {
-                    setIsWorkspaceModalOpen(false);
-                    setIsCreatingProject(true);
-                  }}
-                  className={`group flex items-center justify-center gap-3 p-5 rounded-2xl border border-dashed transition-all duration-300 ${
-                    isDarkMode 
-                      ? 'border-white/20 hover:border-brand-500 hover:bg-brand-500/5 text-slate-400 hover:text-brand-400' 
-                      : 'border-slate-300 hover:border-brand-500 hover:bg-brand-50 text-slate-500 hover:text-brand-600'
-                  }`}
-                >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                    isDarkMode ? 'bg-white/5 group-hover:bg-brand-500/20' : 'bg-slate-100 group-hover:bg-brand-100'
-                  }`}>
-                    <Plus className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium text-sm">Crear nuevo espacio</span>
-                </button>
+                {userData?.role !== 'proveedor' && (
+                  <button 
+                    onClick={() => {
+                      setIsWorkspaceModalOpen(false);
+                      setIsCreatingProject(true);
+                    }}
+                    className={`group flex items-center justify-center gap-3 p-5 rounded-2xl border border-dashed transition-all duration-300 ${
+                      isDarkMode 
+                        ? 'border-white/20 hover:border-brand-500 hover:bg-brand-500/5 text-slate-400 hover:text-brand-400' 
+                        : 'border-slate-300 hover:border-brand-500 hover:bg-brand-50 text-slate-500 hover:text-brand-600'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                      isDarkMode ? 'bg-white/5 group-hover:bg-brand-500/20' : 'bg-slate-100 group-hover:bg-brand-100'
+                    }`}>
+                      <Plus className="w-5 h-5" />
+                    </div>
+                    <span className="font-medium text-sm">Crear nuevo espacio</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -596,7 +627,7 @@ export default function App() {
               {/* Common Table Header for Data and Flows */}
               <div className={`flex items-center px-6 border-b h-12 transition-colors ${isDarkMode ? 'bg-[#0f0f13]/80 backdrop-blur-sm border-white/5' : 'bg-white/80 backdrop-blur-sm border-slate-200'}`}>
                 <div className="flex items-center gap-1 overflow-x-auto no-scrollbar h-full mr-4 flex-1">
-                  {tables.filter(t => t.projectId === activeProjectId).map(table => (
+                  {visibleTables.map(table => (
                     <div
                       key={table.id}
                       onClick={() => setActiveTableId(table.id)}
@@ -663,10 +694,12 @@ export default function App() {
                       </div>
                     </div>
                   ))}
-                  <button onClick={() => setIsCreateTableModalOpen(true)} className={`flex items-center gap-1.5 px-4 h-full text-xs font-black uppercase tracking-widest transition-all border-b-2 border-transparent ${isDarkMode ? 'text-slate-500 hover:text-white hover:bg-white/5' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`}>
-                    <Plus className="w-3.5 h-3.5" />
-                    Nueva
-                  </button>
+                  {userData?.role !== 'proveedor' && (
+                    <button onClick={() => setIsCreateTableModalOpen(true)} className={`flex items-center gap-1.5 px-4 h-full text-xs font-black uppercase tracking-widest transition-all border-b-2 border-transparent ${isDarkMode ? 'text-slate-500 hover:text-white hover:bg-white/5' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`}>
+                      <Plus className="w-3.5 h-3.5" />
+                      Nueva
+                    </button>
+                  )}
                 </div>
 
                 <div className="relative">

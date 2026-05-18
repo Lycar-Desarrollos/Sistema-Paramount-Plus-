@@ -9,9 +9,11 @@ import {
   Settings2, LayoutPanelLeft, ArrowRightLeft,
   GripVertical, Database, Zap
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function KanbanEngine({ tableId }: { tableId: string }) {
   const { isDarkMode } = useTheme();
+  const { userData } = useAuth();
   const tables = useCampaignStore(state => state.tables);
   const table = tables.find(t => t.id === tableId);
   const records = useCampaignStore(state => state.records);
@@ -299,28 +301,32 @@ export default function KanbanEngine({ tableId }: { tableId: string }) {
                 </AnimatePresence>
 
                 {/* Quick Add Button at the bottom */}
-                <button 
-                  onClick={() => handleAddInColumn(col.label)}
-                  className="w-full py-6 rounded-[32px] border-2 border-dashed border-white/5 hover:border-brand-500/40 hover:bg-brand-500/[0.02] flex items-center justify-center gap-3 text-slate-600 hover:text-brand-500 transition-all group/addbtn"
-                >
-                  <Plus className="w-5 h-5 group-hover/addbtn:scale-125 transition-transform" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Añadir registro</span>
-                </button>
+                {userData?.role !== 'proveedor' && (
+                  <button 
+                    onClick={() => handleAddInColumn(col.label)}
+                    className="w-full py-6 rounded-[32px] border-2 border-dashed border-white/5 hover:border-brand-500/40 hover:bg-brand-500/[0.02] flex items-center justify-center gap-3 text-slate-600 hover:text-brand-500 transition-all group/addbtn"
+                  >
+                    <Plus className="w-5 h-5 group-hover/addbtn:scale-125 transition-transform" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Añadir registro</span>
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
 
         {/* Add Status Column shortcut */}
-        <div className="flex-shrink-0 w-80 flex items-center justify-center">
-           <button 
-             onClick={() => {/* Open Add Column Modal */}}
-             className="w-full h-24 rounded-[40px] border-2 border-dashed border-white/5 flex flex-col items-center justify-center gap-2 text-slate-700 hover:text-brand-500 hover:border-brand-500/20 hover:bg-white/[0.01] transition-all"
-           >
-             <Plus className="w-6 h-6" />
-             <span className="text-[10px] font-black uppercase tracking-widest">Añadir Etapa</span>
-           </button>
-        </div>
+        {userData?.role !== 'proveedor' && (
+          <div className="flex-shrink-0 w-80 flex items-center justify-center">
+             <button 
+               onClick={() => {/* Open Add Column Modal */}}
+               className="w-full h-24 rounded-[40px] border-2 border-dashed border-white/5 flex flex-col items-center justify-center gap-2 text-slate-700 hover:text-brand-500 hover:border-brand-500/20 hover:bg-white/[0.01] transition-all"
+             >
+               <Plus className="w-6 h-6" />
+               <span className="text-[10px] font-black uppercase tracking-widest">Añadir Etapa</span>
+             </button>
+          </div>
+        )}
       </div>
     </div>
   );
