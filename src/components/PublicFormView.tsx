@@ -1,10 +1,107 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import type { KeyboardEvent } from 'react';
 import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useCampaignStore } from '../store/useCampaignStore';
 import { uploadToCloudinary } from '../services/cloudinary';
-import { Loader2, CheckCircle2, Upload, FileText, Send, X, Image, File as FileIcon, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, Upload, FileText, Send, X, Image, File as FileIcon, AlertCircle, Tag } from 'lucide-react';
 import type { ColumnDefinition } from '../store/useCampaignStore';
+
+// ── Tag Input Component ───────────────────────────────────────────────────────
+const TAG_COLORS = [
+  { bg: 'bg-violet-100', text: 'text-violet-700', border: 'border-violet-200', dot: 'bg-violet-400' },
+  { bg: 'bg-sky-100',    text: 'text-sky-700',    border: 'border-sky-200',    dot: 'bg-sky-400' },
+  { bg: 'bg-emerald-100',text: 'text-emerald-700',border: 'border-emerald-200',dot: 'bg-emerald-400' },
+  { bg: 'bg-amber-100',  text: 'text-amber-700',  border: 'border-amber-200',  dot: 'bg-amber-400' },
+  { bg: 'bg-rose-100',   text: 'text-rose-700',   border: 'border-rose-200',   dot: 'bg-rose-400' },
+  { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-400' },
+  { bg: 'bg-pink-100',   text: 'text-pink-700',   border: 'border-pink-200',   dot: 'bg-pink-400' },
+  { bg: 'bg-teal-100',   text: 'text-teal-700',   border: 'border-teal-200',   dot: 'bg-teal-400' },
+];
+
+function TagInput({ value, onChange, placeholder, required }: {
+  value: string[];
+  onChange: (tags: string[]) => void;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  const [inputVal, setInputVal] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const addTagsFromText = (text: string) => {
+    const newTags = text
+      .split(',')
+      .map(t => t.trim())
+      .filter(t => t.length > 0 && !value.includes(t));
+    if (newTags.length > 0) onChange([...value, ...newTags]);
+    setInputVal('');
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTagsFromText(inputVal);
+    } else if (e.key === 'Backspace' && inputVal === '' && value.length > 0) {
+      onChange(value.slice(0, -1));
+    }
+  };
+
+  const handleBlur = () => {
+    if (inputVal.trim()) addTagsFromText(inputVal);
+  };
+
+  const removeTag = (idx: number) => {
+    onChange(value.filter((_, i) => i !== idx));
+    inputRef.current?.focus();
+  };
+
+  const colorFor = (i: number) => TAG_COLORS[i % TAG_COLORS.length];
+
+  return (
+    <div
+      className="w-full min-h-[56px] px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-wrap gap-2 items-start cursor-text focus-within:border-brand-500 focus-within:bg-white transition-all"
+      onClick={() => inputRef.current?.focus()}
+    >
+      {value.map((tag, i) => {
+        const c = colorFor(i);
+        return (
+          <span
+            key={i}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${c.bg} ${c.text} ${c.border} select-none animate-in fade-in`}
+            style={{ animation: 'tagIn 0.15s ease' }}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${c.dot} flex-shrink-0`} />
+            {tag}
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); removeTag(i); }}
+              className={`ml-0.5 rounded-full p-0.5 hover:bg-black/10 transition-colors flex items-center justify-center`}
+              aria-label={`Eliminar ${tag}`}
+            >
+              <X className="w-2.5 h-2.5" />
+            </button>
+          </span>
+        );
+      })}
+      <input
+        ref={inputRef}
+        type="text"
+        value={inputVal}
+        required={required && value.length === 0}
+        onChange={e => setInputVal(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        placeholder={value.length === 0 ? (placeholder || 'Escribe y separa por coma...') : ''}
+        className="flex-1 min-w-[140px] bg-transparent outline-none text-sm font-medium text-slate-700 placeholder:text-slate-400 py-0.5"
+      />
+      {value.length === 0 && (
+        <span className="text-[10px] text-slate-300 font-medium self-center ml-auto pr-1 whitespace-nowrap">
+          Separa con coma o Enter
+        </span>
+      )}
+    </div>
+  );
+}
 
 // ── Per-field file state ──────────────────────────────────────────────────
 interface FileEntry {
@@ -381,6 +478,21 @@ export default function PublicFormView() {
                     value={formData[col.id] || ''}
                     onChange={e => setFormData({ ...formData, [col.id]: e.target.value })}
                   />
+                )}
+
+                {/* TAGS — comma-separated chips */}
+                {col.type === 'tags' && (
+                  <div className="space-y-1.5">
+                    <TagInput
+                      value={Array.isArray(formData[col.id]) ? formData[col.id] : (formData[col.id] ? [formData[col.id]] : [])}
+                      onChange={tags => setFormData({ ...formData, [col.id]: tags })}
+                      placeholder={`Ej: Pluto TV, MTV, HBO...`}
+                      required={col.required}
+                    />
+                    <p className="text-[11px] text-slate-400 font-medium pl-1">
+                      Escribe un valor y presiona <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono">Enter</kbd> o <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono">,</kbd> para agregar
+                    </p>
+                  </div>
                 )}
 
                 {/* ATTACHMENT — supports multiple files, image preview */}

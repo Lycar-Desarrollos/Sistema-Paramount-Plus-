@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2, Calendar, Link2, ExternalLink, User, ChevronDown, X, Loader2, Maximize2, Rows, List, Paperclip, Upload, FileText, Send } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, Plus, LayoutGrid, EyeOff, Settings, Trash2, CheckCircle2, Edit2, Calendar, Link2, ExternalLink, User, ChevronDown, X, Loader2, Maximize2, Rows, List, Paperclip, Upload, FileText, Send, Tag } from 'lucide-react';
 import { useCampaignStore, type ColumnDefinition, type ColumnType, type RecordData } from '../store/useCampaignStore';
 import { cn, hashColor, AVATAR_COLORS } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
@@ -442,6 +442,64 @@ const DynamicCell = ({ record, column, columnIndex, setIsLinkingRecord, setDetai
       );
     }
 
+
+    case 'tags': {
+      const GRID_TAG_COLORS = [
+        { bg: 'bg-violet-500/15', text: 'text-violet-300', border: 'border-violet-500/20' },
+        { bg: 'bg-sky-500/15',    text: 'text-sky-300',    border: 'border-sky-500/20' },
+        { bg: 'bg-emerald-500/15',text: 'text-emerald-300',border: 'border-emerald-500/20' },
+        { bg: 'bg-amber-500/15',  text: 'text-amber-300',  border: 'border-amber-500/20' },
+        { bg: 'bg-rose-500/15',   text: 'text-rose-300',   border: 'border-rose-500/20' },
+        { bg: 'bg-indigo-500/15', text: 'text-indigo-300', border: 'border-indigo-500/20' },
+        { bg: 'bg-pink-500/15',   text: 'text-pink-300',   border: 'border-pink-500/20' },
+        { bg: 'bg-teal-500/15',   text: 'text-teal-300',   border: 'border-teal-500/20' },
+      ];
+      const tags: string[] = Array.isArray(value)
+        ? value.filter(Boolean)
+        : typeof value === 'string' && value.trim()
+          ? value.split(',').map((t: string) => t.trim()).filter(Boolean)
+          : [];
+      return (
+        <td className="p-0 border-r min-w-[200px]" onClick={() => !isProveedor && setEditing(true)}>
+          <div className="px-2 min-h-[44px] flex flex-wrap gap-1.5 py-2 items-center cursor-pointer">
+            {tags.length > 0 ? (
+              tags.map((tag, i) => {
+                const c = GRID_TAG_COLORS[i % GRID_TAG_COLORS.length];
+                return (
+                  <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${c.bg} ${c.text} ${c.border}`}>
+                    <span className="w-1 h-1 rounded-full bg-current opacity-60" />
+                    {tag}
+                  </span>
+                );
+              })
+            ) : (
+              <span className="text-[10px] italic text-slate-600">Sin tags</span>
+            )}
+          </div>
+          {editing && (
+            <div className="absolute inset-0 z-10" onClick={e => e.stopPropagation()}>
+              <input
+                autoFocus
+                defaultValue={tags.join(', ')}
+                onBlur={e => {
+                  const newTags = e.target.value.split(',').map(t => t.trim()).filter(Boolean);
+                  handleUpdate(newTags);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const newTags = (e.target as HTMLInputElement).value.split(',').map(t => t.trim()).filter(Boolean);
+                    handleUpdate(newTags);
+                  }
+                }}
+                placeholder="Pluto TV, MTV, HBO..."
+                className={`w-full h-full min-h-[44px] px-3 text-xs font-bold outline-none border-none ${isDarkMode ? 'bg-brand-500/10 text-white' : 'bg-white text-slate-900 shadow-inner'}`}
+              />
+            </div>
+          )}
+        </td>
+      );
+    }
+
     default: { // text or unknown
       const isUrl = typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('www.'));
       const isLinkCol = column.name.toLowerCase().includes('link') || column.name.toLowerCase().includes('url');
@@ -505,6 +563,7 @@ const HeaderCell = ({ column, setEditingColumn }: { column: ColumnDefinition, se
       case 'select': return <LayoutGrid className="w-3 h-3" />;
       case 'user': return <User className="w-3 h-3" />;
       case 'attachment': return <Paperclip className="w-3 h-3" />;
+      case 'tags': return <Tag className="w-3 h-3" />;
       default: return <span className="text-[10px] font-mono">Aa</span>;
     }
   };
@@ -1345,7 +1404,7 @@ export default function GridEngine({ tableId: _tableId }: { tableId?: string } =
                 <div>
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Tipo de dato</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {(['text', 'select', 'date', 'checkbox', 'link', 'user', 'attachment'] as ColumnType[]).map(t => (
+                    {(['text', 'select', 'date', 'checkbox', 'link', 'user', 'attachment', 'tags'] as ColumnType[]).map(t => (
                       <button 
                         key={t}
                         onClick={() => {
