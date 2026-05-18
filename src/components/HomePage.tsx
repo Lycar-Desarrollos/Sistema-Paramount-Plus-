@@ -53,7 +53,7 @@ export default function HomePage({
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
-  const [activeSidebarTab, setActiveSidebarTab] = useState<'Inicio'|'Favoritos'|'Recientes'|'Compartidos'|null>(
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'Inicio'|'Favoritos'|'Recientes'|null>(
     selectedProjectId ? null : 'Inicio'
   );
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -1099,7 +1099,7 @@ export default function HomePage({
                 setActiveProjectId(projectId);
                 onOpenTable(projectId, tableId);
               }}
-              onNavigateTab={(tab) => setActiveSidebarTab(tab)}
+              onNavigateTab={(tab) => setActiveSidebarTab(tab as 'Inicio' | 'Favoritos' | 'Recientes' | null)}
             />
           ) : (
             <>
